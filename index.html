@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lifecycle Marketing Hub</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --brand: #6366f1;
+            --brand-light: #e0e7ff;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --muted: #64748b;
+            --success: #10b981;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+        header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; }
+        header h1 { font-size: 18px; font-weight: 700; }
+        header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+        nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; }
+        nav button { background: none; border: none; padding: 12px 16px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.15s; }
+        nav button.active { color: var(--brand); border-bottom-color: var(--brand); }
+        nav button:hover:not(.active) { color: var(--text); }
+
+        main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        h2 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+        .card-flush { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0; margin-bottom: 16px; overflow: hidden; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+        .field { margin-bottom: 14px; }
+        .field label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .field input, .field select, .field textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; outline: none; background: var(--surface); transition: border-color 0.15s; }
+        .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--brand); }
+        .field textarea { resize: vertical; min-height: 80px; }
+
+        .btn { padding: 9px 18px; border-radius: 6px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+        .btn-primary { background: var(--brand); color: white; }
+        .btn-primary:hover { opacity: 0.85; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; background: #f1f5f9; border: 1px solid var(--border); color: var(--text); border-radius: 6px; cursor: pointer; }
+
+        .alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 14px; }
+        .alert-success { background: #d1fae5; color: #065f46; }
+        .alert-error { background: #fee2e2; color: #991b1b; }
+        .alert-info { background: var(--brand-light); color: #3730a3; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); border-bottom: 1px solid var(--border); background: #f8fafc; }
+        td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tbody tr:hover td { background: #f8fafc; }
+
+        .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+        .badge-Product.Launch, .badge-Product\.Launch { background: #dbeafe; color: #1d4ed8; }
+        .badge-Event { background: #fce7f3; color: #9d174d; }
+        .badge-Onboarding { background: #d1fae5; color: #065f46; }
+        .badge-Nurture { background: #fef3c7; color: #92400e; }
+        .badge-Re-engagement { background: #ede9fe; color: #5b21b6; }
+        .badge-Promotional { background: #ffedd5; color: #9a3412; }
+
+        .bench-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+        .bench-cat { margin-bottom: 12px; }
+        .bench-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .bench-metric { text-align: center; }
+        .bench-metric .label { font-size: 11px; color: var(--muted); }
+        .bench-metric .value { font-size: 22px; font-weight: 700; color: var(--brand); }
+
+        .filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+        .filters select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--surface); }
+        .filters span { color: var(--muted); font-size: 13px; }
+
+        .inner-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+        .inner-tabs button { background: none; border: none; padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+        .inner-tabs button.active { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
+
+        .winner-a { color: var(--success); font-weight: 700; }
+        .winner-b { color: var(--brand); font-weight: 700; }
+
+        .prompt-box { background: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 20px; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.7; white-space: pre-wrap; margin-top: 12px; max-height: 420px; overflow-y: auto; }
+
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .empty { text-align: center; padding: 48px; color: var(--muted); }
+        .empty strong { display: block; margin-bottom: 6px; }
+
+        @media (max-width: 768px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Lifecycle Marketing Hub</h1>
+    <p>Campaign library &middot; A/B tests &middot; Reporting</p>
+</header>
+
+<nav>
+    <button class="active" data-tab="dashboard">Dashboard</button>
+    <button data-tab="log">Log Campaign</button>
+    <button data-tab="library">Campaign Library</button>
+    <button data-tab="abtests">A/B Tests</button>
+    <button data-tab="reports">Generate Report</button>
+</nav>
+
+<main>
+
+    <!-- DASHBOARD -->
+    <div id="tab-dashboard" class="tab-content active">
+        <h2>Benchmarks by Category</h2>
+        <div id="bench-grid" class="grid-3" style="margin-bottom: 24px;"></div>
+        <h2>Recent Campaigns</h2>
+        <div class="card-flush">
+            <table>
+                <thead><tr><th>Campaign</th><th>Category</th><th>Date</th><th>Open %</th><th>Click %</th><th>CTOR %</th></tr></thead>
+                <tbody id="recent-body"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- LOG CAMPAIGN -->
+    <div id="tab-log" class="tab-content">
+        <h2>Log a Campaign</h2>
+        <div id="log-alert"></div>
+        <div class="card">
+            <div class="grid-2">
+                <div>
+                    <div class="field"><label>Campaign Name *</label><input id="f-name" type="text" placeholder="e.g. Fin AI Launch — Wave 1"></div>
+                    <div class="field"><label>Category *</label>
+                        <select id="f-category">
+                            <option value="">Select...</option>
+                            <option>Product Launch</option><option>Event</option><option>Onboarding</option>
+                            <option>Nurture</option><option>Re-engagement</option><option>Promotional</option>
+                        </select>
+                    </div>
+                    <div class="field"><label>Channel</label>
+                        <select id="f-channel">
+                            <option value="">Select...</option>
+                            <option>Email</option><option>In-App</option><option>Push</option><option>SMS</option><option>Multi-channel</option>
+                        </select>
+                    </div>
+                    <div class="field"><label>Send Date</label><input id="f-date" type="date"></div>
+                    <div class="field"><label>Audience Segment</label><input id="f-segment" type="text" placeholder="e.g. Pro plan, 30+ days active"></div>
+                    <div class="field"><label>Subject Line</label><input id="f-subject" type="text" placeholder="e.g. Meet your new AI teammate"></div>
+                    <div class="field"><label>Your Name</label><input id="f-author" type="text" placeholder="e.g. Shane"></div>
+                </div>
+                <div>
+                    <div class="field"><label>Emails Sent</label><input id="f-sent" type="number" placeholder="0" min="0"></div>
+                    <div class="field"><label>Open Rate (%)</label><input id="f-open" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                    <div class="field"><label>Click Rate (%)</label><input id="f-click" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                    <div class="field"><label>Click-to-Open Rate (%)</label><input id="f-ctor" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                    <div class="field"><label>Unsubscribe Rate (%)</label><input id="f-unsub" type="number" placeholder="0.00" step="0.01" min="0" max="100"></div>
+                    <div class="field"><label>Conversion Rate (%)</label><input id="f-conv" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                    <div class="field"><label>Revenue ($)</label><input id="f-revenue" type="number" placeholder="0" min="0"></div>
+                </div>
+            </div>
+            <div class="field"><label>Notes / Context</label><textarea id="f-notes" placeholder="What was the goal? Anything unusual about this send?"></textarea></div>
+            <button class="btn btn-primary" onclick="saveCampaign()">Save Campaign</button>
+        </div>
+    </div>
+
+    <!-- CAMPAIGN LIBRARY -->
+    <div id="tab-library" class="tab-content">
+        <div class="section-header">
+            <h2>Campaign Library</h2>
+        </div>
+        <div class="filters">
+            <select id="filter-cat" onchange="loadLibrary()">
+                <option value="">All Categories</option>
+                <option>Product Launch</option><option>Event</option><option>Onboarding</option>
+                <option>Nurture</option><option>Re-engagement</option><option>Promotional</option>
+            </select>
+            <select id="filter-ch" onchange="loadLibrary()">
+                <option value="">All Channels</option>
+                <option>Email</option><option>In-App</option><option>Push</option><option>SMS</option><option>Multi-channel</option>
+            </select>
+            <span id="library-count"></span>
+        </div>
+        <div class="card-flush">
+            <table>
+                <thead><tr><th>Campaign</th><th>Category</th><th>Channel</th><th>Date</th><th>Sent</th><th>Open %</th><th>Click %</th><th>CTOR %</th><th>Unsub %</th></tr></thead>
+                <tbody id="library-body"><tr><td colspan="9" class="empty">Loading...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- A/B TESTS -->
+    <div id="tab-abtests" class="tab-content">
+        <h2>A/B Test Tracker</h2>
+        <div class="inner-tabs">
+            <button class="active" onclick="showInner('ab-view', this)">Test Log</button>
+            <button onclick="showInner('ab-form', this)">Log New Test</button>
+        </div>
+
+        <div id="ab-view">
+            <div class="card-flush">
+                <table>
+                    <thead><tr><th>Test</th><th>Element</th><th>Variant A</th><th>A Open %</th><th>A Click %</th><th>Variant B</th><th>B Open %</th><th>B Click %</th><th>Winner</th><th>Insight</th><th>Date</th></tr></thead>
+                    <tbody id="ab-body"><tr><td colspan="11" class="empty">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="ab-form" style="display:none;">
+            <div id="ab-alert"></div>
+            <div class="card">
+                <div class="grid-2">
+                    <div>
+                        <div class="field"><label>Test Name *</label><input id="ab-name" type="text" placeholder="e.g. Subject line test — Nov launch"></div>
+                        <div class="field"><label>Element Tested</label>
+                            <select id="ab-element">
+                                <option>Subject Line</option><option>CTA</option><option>Send Time</option>
+                                <option>Content</option><option>Design</option><option>Sender Name</option><option>Offer</option>
+                            </select>
+                        </div>
+                        <div class="field"><label>Hypothesis</label><textarea id="ab-hyp" placeholder="e.g. A curiosity-gap subject will outperform a benefit-led one for this segment"></textarea></div>
+                        <div class="field"><label>Test Date</label><input id="ab-date" type="date"></div>
+                        <div class="field"><label>Winner</label>
+                            <select id="ab-winner"><option value="A">A</option><option value="B">B</option><option value="N">No clear winner</option></select>
+                        </div>
+                        <div class="field"><label>What did you learn?</label><textarea id="ab-insight" placeholder="e.g. Curiosity-gap outperformed by 4pp on opens — will apply to future launches"></textarea></div>
+                    </div>
+                    <div>
+                        <p style="font-weight:700;margin-bottom:12px;">Variant A</p>
+                        <div class="field"><label>Describe Variant A</label><input id="ab-a-name" type="text" placeholder="e.g. Benefit-led"></div>
+                        <div class="field"><label>A Open Rate (%)</label><input id="ab-a-open" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                        <div class="field"><label>A Click Rate (%)</label><input id="ab-a-click" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                        <p style="font-weight:700;margin:16px 0 12px;">Variant B</p>
+                        <div class="field"><label>Describe Variant B</label><input id="ab-b-name" type="text" placeholder="e.g. Curiosity-gap"></div>
+                        <div class="field"><label>B Open Rate (%)</label><input id="ab-b-open" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                        <div class="field"><label>B Click Rate (%)</label><input id="ab-b-click" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="saveABTest()">Save Test</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- REPORT GENERATOR -->
+    <div id="tab-reports" class="tab-content">
+        <h2>Generate a Campaign Report</h2>
+        <div class="card">
+            <div class="field"><label>Select Campaign</label><select id="r-campaign"><option>Loading...</option></select></div>
+            <div class="field"><label>Report Type</label>
+                <select id="r-type">
+                    <option>Stakeholder update (Slack or email)</option>
+                    <option>Post-mortem / retrospective</option>
+                    <option>Executive summary</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="generatePrompt()">Build Report Prompt</button>
+        </div>
+
+        <div id="report-out" style="display:none;">
+            <div class="section-header" style="margin-top: 8px;">
+                <h2>Your Claude Prompt</h2>
+                <button class="btn-sm" onclick="copyPrompt()">Copy to clipboard</button>
+            </div>
+            <div class="alert alert-info">Paste this into Claude (claude.ai or Claude Code) to get your report instantly.</div>
+            <div class="prompt-box" id="prompt-text"></div>
+        </div>
+    </div>
+
+</main>
+
+<script>
+const { createClient } = supabase;
+const db = createClient(
+    'https://uasecpkhdkonpwomaeze.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhc2VjcGtoZGtvbnB3b21hZXplIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjkzMzMsImV4cCI6MjA4NzEwNTMzM30.jmCTT5ta7u3f8FIwlkYKQ1amLJ6Qn-MVxBv4S3ToQaw'
+);
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+document.querySelectorAll('nav button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        const id = 'tab-' + btn.dataset.tab;
+        document.getElementById(id).classList.add('active');
+        if (btn.dataset.tab === 'dashboard') loadDashboard();
+        if (btn.dataset.tab === 'library')   loadLibrary();
+        if (btn.dataset.tab === 'abtests')   loadABTests();
+        if (btn.dataset.tab === 'reports')   loadCampaignsForReport();
+    });
+});
+
+function showInner(id, btn) {
+    ['ab-view','ab-form'].forEach(i => document.getElementById(i).style.display = 'none');
+    document.querySelectorAll('.inner-tabs button').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).style.display = 'block';
+    btn.classList.add('active');
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const pct = v => v != null ? (v * 100).toFixed(1) + '%' : '—';
+const num = v => v != null ? Number(v).toLocaleString() : '—';
+
+function badge(cat) {
+    const cls = (cat || '').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+    return `<span class="badge badge-${cls}">${cat}</span>`;
+}
+
+function showAlert(elId, msg, type = 'success') {
+    document.getElementById(elId).innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+    setTimeout(() => document.getElementById(elId).innerHTML = '', 4000);
+}
+
+function toRate(id) { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v / 100; }
+function toInt(id)  { const v = parseInt(document.getElementById(id).value);   return isNaN(v) ? null : v; }
+function toFlt(id)  { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; }
+function val(id)    { return document.getElementById(id).value.trim() || null; }
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+    const { data } = await db.from('lifecycle_campaigns').select('*').order('send_date', { ascending: false });
+
+    if (!data || data.length === 0) {
+        document.getElementById('bench-grid').innerHTML = `<div class="empty" style="grid-column:1/-1;"><strong>No campaigns yet</strong>Use "Log Campaign" to add your first one.</div>`;
+        document.getElementById('recent-body').innerHTML = `<tr><td colspan="6" class="empty">No campaigns yet</td></tr>`;
+        return;
+    }
+
+    // Benchmarks grouped by category
+    const grouped = {};
+    data.forEach(c => { if (!grouped[c.category]) grouped[c.category] = []; grouped[c.category].push(c); });
+
+    const avg = (rows, field) => {
+        const vals = rows.filter(r => r[field] != null).map(r => r[field]);
+        return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length * 100).toFixed(1) : '—';
+    };
+
+    document.getElementById('bench-grid').innerHTML = Object.entries(grouped).map(([cat, rows]) => `
+        <div class="bench-card">
+            <div class="bench-cat">${badge(cat)} <span style="color:var(--muted);font-size:12px;margin-left:6px;">${rows.length} campaign${rows.length > 1 ? 's' : ''}</span></div>
+            <div class="bench-metrics">
+                <div class="bench-metric"><div class="label">Avg Open</div><div class="value">${avg(rows,'open_rate')}%</div></div>
+                <div class="bench-metric"><div class="label">Avg Click</div><div class="value">${avg(rows,'click_rate')}%</div></div>
+                <div class="bench-metric"><div class="label">Avg CTOR</div><div class="value">${avg(rows,'click_to_open_rate')}%</div></div>
+            </div>
+        </div>
+    `).join('');
+
+    // Recent table
+    document.getElementById('recent-body').innerHTML = data.slice(0, 10).map(c => `
+        <tr>
+            <td><strong>${c.campaign_name}</strong>${c.subject_line ? `<br><span style="color:var(--muted);font-size:12px;">${c.subject_line}</span>` : ''}</td>
+            <td>${badge(c.category)}</td>
+            <td>${c.send_date || '—'}</td>
+            <td>${pct(c.open_rate)}</td>
+            <td>${pct(c.click_rate)}</td>
+            <td>${pct(c.click_to_open_rate)}</td>
+        </tr>
+    `).join('');
+}
+
+// ── LOG CAMPAIGN ──────────────────────────────────────────────────────────────
+async function saveCampaign() {
+    const name = val('f-name');
+    const category = val('f-category');
+    if (!name || !category) { showAlert('log-alert', 'Campaign name and category are required.', 'error'); return; }
+
+    const { error } = await db.from('lifecycle_campaigns').insert({
+        campaign_name: name, category,
+        channel: val('f-channel'), audience_segment: val('f-segment'),
+        send_date: val('f-date'), subject_line: val('f-subject'),
+        emails_sent: toInt('f-sent'), open_rate: toRate('f-open'),
+        click_rate: toRate('f-click'), click_to_open_rate: toRate('f-ctor'),
+        unsubscribe_rate: toRate('f-unsub'), conversion_rate: toRate('f-conv'),
+        revenue: toFlt('f-revenue'), notes: val('f-notes'), created_by: val('f-author'),
+    });
+
+    if (error) { showAlert('log-alert', 'Error: ' + error.message, 'error'); return; }
+    showAlert('log-alert', `"${name}" saved successfully!`);
+    document.querySelectorAll('#tab-log input, #tab-log textarea, #tab-log select').forEach(el => el.value = '');
+}
+
+// ── LIBRARY ───────────────────────────────────────────────────────────────────
+async function loadLibrary() {
+    let q = db.from('lifecycle_campaigns').select('*').order('send_date', { ascending: false });
+    const cat = document.getElementById('filter-cat').value;
+    const ch  = document.getElementById('filter-ch').value;
+    if (cat) q = q.eq('category', cat);
+    if (ch)  q = q.eq('channel', ch);
+
+    const { data } = await q;
+    document.getElementById('library-count').textContent = `${(data||[]).length} campaign(s)`;
+
+    if (!data || data.length === 0) {
+        document.getElementById('library-body').innerHTML = `<tr><td colspan="9" class="empty">No campaigns found</td></tr>`;
+        return;
+    }
+    document.getElementById('library-body').innerHTML = data.map(c => `
+        <tr>
+            <td><strong>${c.campaign_name}</strong>${c.subject_line ? `<br><span style="color:var(--muted);font-size:12px;">${c.subject_line}</span>` : ''}</td>
+            <td>${badge(c.category)}</td>
+            <td>${c.channel || '—'}</td>
+            <td>${c.send_date || '—'}</td>
+            <td>${num(c.emails_sent)}</td>
+            <td>${pct(c.open_rate)}</td>
+            <td>${pct(c.click_rate)}</td>
+            <td>${pct(c.click_to_open_rate)}</td>
+            <td>${pct(c.unsubscribe_rate)}</td>
+        </tr>
+    `).join('');
+}
+
+// ── A/B TESTS ─────────────────────────────────────────────────────────────────
+async function loadABTests() {
+    const { data } = await db.from('lifecycle_ab_tests').select('*').order('test_date', { ascending: false });
+    if (!data || data.length === 0) {
+        document.getElementById('ab-body').innerHTML = `<tr><td colspan="11" class="empty"><strong>No tests logged yet</strong>Use "Log New Test" to add one.</td></tr>`;
+        return;
+    }
+    document.getElementById('ab-body').innerHTML = data.map(t => `
+        <tr>
+            <td><strong>${t.test_name}</strong></td>
+            <td>${t.element_tested || '—'}</td>
+            <td>${t.variant_a_name || '—'}</td>
+            <td>${pct(t.variant_a_open_rate)}</td>
+            <td>${pct(t.variant_a_click_rate)}</td>
+            <td>${t.variant_b_name || '—'}</td>
+            <td>${pct(t.variant_b_open_rate)}</td>
+            <td>${pct(t.variant_b_click_rate)}</td>
+            <td class="${t.winner === 'A' ? 'winner-a' : t.winner === 'B' ? 'winner-b' : ''}">${t.winner === 'N' ? 'No winner' : t.winner || '—'}</td>
+            <td style="max-width:180px;font-size:12px;">${t.winner_notes || '—'}</td>
+            <td>${t.test_date || '—'}</td>
+        </tr>
+    `).join('');
+}
+
+async function saveABTest() {
+    const name = val('ab-name');
+    if (!name) { showAlert('ab-alert', 'Test name is required.', 'error'); return; }
+
+    const { error } = await db.from('lifecycle_ab_tests').insert({
+        test_name: name, element_tested: val('ab-element'),
+        hypothesis: val('ab-hyp'), test_date: val('ab-date'),
+        variant_a_name: val('ab-a-name'), variant_a_open_rate: toRate('ab-a-open'), variant_a_click_rate: toRate('ab-a-click'),
+        variant_b_name: val('ab-b-name'), variant_b_open_rate: toRate('ab-b-open'), variant_b_click_rate: toRate('ab-b-click'),
+        winner: val('ab-winner'), winner_notes: val('ab-insight'),
+    });
+
+    if (error) { showAlert('ab-alert', 'Error: ' + error.message, 'error'); return; }
+    showAlert('ab-alert', 'Test saved!');
+    loadABTests();
+    showInner('ab-view', document.querySelector('.inner-tabs button'));
+    document.querySelectorAll('#ab-form input, #ab-form textarea, #ab-form select').forEach(el => el.value = '');
+}
+
+// ── REPORT GENERATOR ──────────────────────────────────────────────────────────
+async function loadCampaignsForReport() {
+    const { data } = await db.from('lifecycle_campaigns').select('campaign_id, campaign_name, send_date').order('send_date', { ascending: false }).limit(50);
+    const sel = document.getElementById('r-campaign');
+    if (!data || data.length === 0) { sel.innerHTML = '<option>No campaigns yet</option>'; return; }
+    sel.innerHTML = data.map(c => `<option value="${c.campaign_id}">${c.campaign_name}${c.send_date ? ' — ' + c.send_date : ''}</option>`).join('');
+}
+
+async function generatePrompt() {
+    const id = document.getElementById('r-campaign').value;
+    const type = document.getElementById('r-type').value;
+    if (!id) return;
+
+    const { data: rows } = await db.from('lifecycle_campaigns').select('*').eq('campaign_id', id).limit(1);
+    if (!rows || !rows.length) return;
+    const c = rows[0];
+
+    const { data: bench } = await db.from('lifecycle_campaigns').select('open_rate, click_rate, click_to_open_rate').eq('category', c.category);
+    const avg = field => {
+        const vals = (bench || []).filter(r => r[field] != null).map(r => r[field]);
+        return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length * 100).toFixed(1) : 'N/A';
+    };
+
+    const prompt =
+`You are a lifecycle marketing analyst at Intercom. Write a ${type} for the campaign below.
+Be concise and professional. Compare results to the category benchmarks and end with 2 clear, actionable recommendations.
+
+CAMPAIGN DETAILS
+────────────────────────────────
+Name:              ${c.campaign_name}
+Category:          ${c.category}
+Channel:           ${c.channel || 'N/A'}
+Audience Segment:  ${c.audience_segment || 'N/A'}
+Send Date:         ${c.send_date || 'N/A'}
+Subject Line:      ${c.subject_line || 'N/A'}
+Emails Sent:       ${c.emails_sent ? Number(c.emails_sent).toLocaleString() : 'N/A'}
+
+PERFORMANCE VS CATEGORY BENCHMARKS (${c.category})
+────────────────────────────────
+Metric               This Campaign     Category Avg
+Open Rate:           ${c.open_rate ? (c.open_rate*100).toFixed(1)+'%' : 'N/A'}              ${avg('open_rate')}%
+Click Rate:          ${c.click_rate ? (c.click_rate*100).toFixed(1)+'%' : 'N/A'}              ${avg('click_rate')}%
+CTOR:                ${c.click_to_open_rate ? (c.click_to_open_rate*100).toFixed(1)+'%' : 'N/A'}              ${avg('click_to_open_rate')}%
+Unsubscribe Rate:    ${c.unsubscribe_rate ? (c.unsubscribe_rate*100).toFixed(2)+'%' : 'N/A'}
+Conversion Rate:     ${c.conversion_rate ? (c.conversion_rate*100).toFixed(1)+'%' : 'N/A'}
+Revenue:             ${c.revenue ? '$'+Number(c.revenue).toLocaleString() : 'N/A'}
+
+NOTES / CONTEXT
+────────────────────────────────
+${c.notes || 'None provided'}`;
+
+    document.getElementById('prompt-text').textContent = prompt;
+    document.getElementById('report-out').style.display = 'block';
+    document.getElementById('report-out').scrollIntoView({ behavior: 'smooth' });
+}
+
+function copyPrompt() {
+    navigator.clipboard.writeText(document.getElementById('prompt-text').textContent);
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy to clipboard', 2000);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadDashboard();
+</script>
+</body>
+</html>
