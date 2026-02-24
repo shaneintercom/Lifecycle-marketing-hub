@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/intercom-series.js": { "maxDuration": 30 },
+    "api/claude-report.js": { "maxDuration": 30 },
+    "api/claude-experiments.js": { "maxDuration": 30 },
+    "api/claude-series-analysis.js": { "maxDuration": 30 }
+  }
+}

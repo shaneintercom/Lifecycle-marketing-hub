@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <div class="header">
+    <div class="title">Email Inspo Saver</div>
+    <div class="subtitle">Lifecycle Marketing Hub</div>
+  </div>
+
+  <!-- Screenshot / crop area -->
+  <div id="screenshot-wrap">
+    <div id="screenshot-loading">Capturing screenshot…</div>
+    <div id="screenshot-error"></div>
+
+    <div id="crop-container">
+      <img id="screenshot-preview">
+      <canvas id="crop-canvas"></canvas>
+    </div>
+
+    <div id="crop-bar">
+      <span id="crop-hint">Drag to crop to just the email</span>
+      <div id="crop-actions">
+        <button id="apply-btn">✓ Crop</button>
+        <button id="reset-btn">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- File upload (better quality alternative) -->
+  <div id="upload-bar">
+    <span class="upload-label">Better quality:</span>
+    <button id="upload-trigger">📎 Upload a screenshot instead</button>
+    <input type="file" id="f-file" accept="image/*" style="display:none;">
+  </div>
+  <div id="drop-overlay">Drop image here</div>
+
+  <!-- Fields -->
+  <div class="fields">
+    <div class="field">
+      <label>Brand / Source *</label>
+      <input type="text" id="f-source" placeholder="e.g. Notion, Figma, Intercom…">
+    </div>
+    <div class="field">
+      <label>Email Type</label>
+      <select id="f-type">
+        <option value="">Select…</option>
+        <option>Newsletter</option>
+        <option>Onboarding</option>
+        <option>Promotional</option>
+        <option>Transactional</option>
+        <option>Re-engagement</option>
+        <option>Event</option>
+        <option>Product Update</option>
+        <option>Lifecycle</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Lifecycle Category</label>
+      <select id="f-category">
+        <option value="">Select…</option>
+        <option>Launches</option>
+        <option>Early lifecycle</option>
+        <option>Usage</option>
+        <option>Events</option>
+        <option>Acquisition</option>
+        <option>Adhoc</option>
+        <option>Expansion</option>
+        <option>Newsletter</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="f-notes" placeholder="What's great about this? Subject line, layout, CTA…"></textarea>
+    </div>
+  </div>
+
+  <div id="status"></div>
+  <button id="save-btn">Save to Email Inspo</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>
