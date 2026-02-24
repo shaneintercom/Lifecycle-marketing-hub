@@ -2050,8 +2050,22 @@ function combineCSVMatches() {
         const name = (window._csvAllNames || [])[idx];
         if (!name) continue;
         const result = parseIntercomCSV(_lastCSVText, name);
-        if (!result || result.type !== 'single') continue;
-        const d = result.data;
+        if (!result) continue;
+        let d;
+        if (result.type === 'single') {
+            d = result.data;
+        } else if (result.type === 'ab') {
+            // A/B row — sum both variants into combined totals
+            const dA = result.variantA.data, dB = result.variantB.data;
+            d = {
+                sent:    ((dA.sent    || 0) + (dB.sent    || 0)) || null,
+                opened:  ((dA.opened  || 0) + (dB.opened  || 0)) || null,
+                clicked: ((dA.clicked || 0) + (dB.clicked || 0)) || null,
+                replied: ((dA.replied || 0) + (dB.replied || 0)) || null,
+                unsub:   ((dA.unsub   || 0) + (dB.unsub   || 0)) || null,
+                bounced: ((dA.bounced || 0) + (dB.bounced || 0)) || null,
+            };
+        } else { continue; }
         usedNames.push(name);
         if (d.sent    != null) combined.sent    = (combined.sent    ?? 0) + d.sent;
         if (d.opened  != null) combined.opened  = (combined.opened  ?? 0) + d.opened;
@@ -2062,13 +2076,16 @@ function combineCSVMatches() {
     }
 
     if (combined.sent === null) {
-        resultDiv.innerHTML = `<p style="color:#fca5a5;font-size:12px;">Could not parse data from the selected emails.</p>`;
+        const csvHeaders = (_lastCSVText || '').trim().split('\n')[0] || '';
+        resultDiv.innerHTML = `<p style="color:#fca5a5;font-size:12px;margin-bottom:6px;">Could not read a sent count from these rows.</p>
+            <p style="font-size:11px;color:var(--muted);">CSV columns detected: <code style="background:#1e293b;padding:2px 5px;border-radius:3px;font-size:10px;">${csvHeaders.substring(0, 300)}</code></p>
+            <p style="font-size:11px;color:var(--muted);margin-top:4px;">Expected a column containing: receipts, sent, delivered, or recipients.</p>`;
         return;
     }
 
     fillMetricInputs(combined);
     recalcMetrics();
-    resultDiv.innerHTML = `<p style="color:var(--success);font-size:12px;">✓ Combined totals from ${usedNames.length} emails — review metrics above and hit Save Metrics.</p>`;
+    resultDiv.innerHTML = `<p style="color:var(--success);font-size:12px;">✓ Combined totals from ${usedNames.length} email${usedNames.length !== 1 ? 's' : ''} — review metrics above and hit Save Metrics.</p>`;
 }
 
 function fillMetricInputs(d) {
@@ -2154,10 +2171,10 @@ function parseIntercomCSV(csvText, campaignName) {
     const col = (...names) => { for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i >= 0) return i; } return -1; };
 
     const nameIdx  = col('name', 'title', 'campaign', 'message', 'subject');
-    const sentIdx  = col('receipt_total', 'sent', 'delivered', 'receipts', 'total sent');
-    const openIdx  = col('open_total', 'opens', 'opened', 'total open');
-    const clickIdx = col('click_total', 'clicks', 'clicked', 'total click');
-    const replyIdx = col('reply_total', 'replies', 'replied', 'total repl');
+    const sentIdx  = col('receipt_total', 'receipts', 'total sent', 'sent', 'delivered', 'recipient', 'delivery');
+    const openIdx  = col('open_total', 'total open', 'unique open', 'opens', 'opened');
+    const clickIdx = col('click_total', 'total click', 'unique click', 'link click', 'clicks', 'clicked');
+    const replyIdx = col('reply_total', 'total repl', 'replies', 'replied');
     const unsubIdx = col('unsubscribe_total', 'unsubscribes', 'unsubscribed', 'unsub');
     const hbIdx    = col('hard_bounce', 'hard bounce');
     const sbIdx    = col('soft_bounce', 'soft bounce');
