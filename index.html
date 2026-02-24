@@ -1356,7 +1356,10 @@ function renderLibrary() {
 
     function calcAgg(kids) {
         const sum = f => kids.reduce((a, k) => a + (k[f] || 0), 0);
-        const sent = sum('emails_sent'), opened = sum('emails_opened'), clicked = sum('emails_clicked');
+        // Include variant B counts if a child is itself a single-row A/B test
+        const sent    = sum('emails_sent')    + sum('emails_sent_b');
+        const opened  = sum('emails_opened')  + sum('emails_opened_b');
+        const clicked = sum('emails_clicked') + sum('emails_clicked_b');
         const unsub = sum('unsubscribed'), bounced = sum('bounced');
         if (!sent) return null;
         return {
@@ -1392,10 +1395,27 @@ function renderLibrary() {
 
     // ── Row builders ──
     const rowHTML = (c, agg) => {
-        const d = agg || c;
+        let d = agg || c;
+        // For single-row A/B tests: combine variant A + B into accurate totals
+        if (!agg && c.emails_sent_b) {
+            const sA = c.emails_sent || 0,    sB = c.emails_sent_b || 0;
+            const oA = c.emails_opened || 0,  oB = c.emails_opened_b || 0;
+            const cA = c.emails_clicked || 0, cB = c.emails_clicked_b || 0;
+            const totalSent    = sA + sB;
+            const totalOpened  = oA + oB;
+            const totalClicked = cA + cB;
+            d = {
+                ...c,
+                emails_sent:        totalSent,
+                open_rate:          (totalOpened  && totalSent)    ? totalOpened  / totalSent    : c.open_rate,
+                click_rate:         (totalClicked && totalSent)    ? totalClicked / totalSent    : c.click_rate,
+                click_to_open_rate: (totalClicked && totalOpened)  ? totalClicked / totalOpened  : c.click_to_open_rate,
+            };
+        }
         const cat = c.category || '';
+        const isABRow = !agg && !!c.emails_sent_b;
         return `<tr class="clickable" onclick="openCampaignById('${c.campaign_id}')">
-            <td><strong>${c.campaign_name}</strong>${agg && d.emails_sent ? `<span style="font-size:10px;color:var(--muted);font-weight:400;margin-left:6px;">Σ combined</span>` : ''}${c.subject_line ? `<br><span style="color:var(--muted);font-size:12px;">${c.subject_line}</span>` : ''}</td>
+            <td><strong>${c.campaign_name}</strong>${(agg && d.emails_sent) || isABRow ? `<span style="font-size:10px;color:var(--muted);font-weight:400;margin-left:6px;">Σ combined</span>` : ''}${c.subject_line ? `<br><span style="color:var(--muted);font-size:12px;">${c.subject_line}</span>` : ''}</td>
             <td>${badge(cat)}</td>
             <td>${c.send_date || '—'}</td>
             <td>${num(d.emails_sent)}</td>
