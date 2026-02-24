@@ -1414,11 +1414,15 @@ function renderLibrary() {
         }
         const cat = c.category || '';
         const isABRow = !agg && !!c.emails_sent_b;
+        // Variant breakdown label for A/B rows: "A: 40k / B: 40k"
+        const abBreakdown = isABRow
+            ? `<div style="font-size:10px;color:var(--muted);margin-top:1px;">A: ${num(c.emails_sent)} / B: ${num(c.emails_sent_b)}</div>`
+            : '';
         return `<tr class="clickable" onclick="openCampaignById('${c.campaign_id}')">
             <td><strong>${c.campaign_name}</strong>${(agg && d.emails_sent) || isABRow ? `<span style="font-size:10px;color:var(--muted);font-weight:400;margin-left:6px;">Σ combined</span>` : ''}${c.subject_line ? `<br><span style="color:var(--muted);font-size:12px;">${c.subject_line}</span>` : ''}</td>
             <td>${badge(cat)}</td>
             <td>${c.send_date || '—'}</td>
-            <td>${num(d.emails_sent)}</td>
+            <td>${num(d.emails_sent)}${abBreakdown}</td>
             <td class="${heat(d.open_rate, cat, 'open')}">${pct(d.open_rate)}</td>
             <td class="${heat(d.click_rate, cat, 'click')}">${pct(d.click_rate)}</td>
             <td class="${heat(d.click_to_open_rate, cat, 'ctor')}">${pct(d.click_to_open_rate)}</td>
