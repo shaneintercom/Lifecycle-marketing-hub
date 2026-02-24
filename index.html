@@ -1648,13 +1648,19 @@ function buildSingleTableHTML(c) {
         if (fallback != null)       return (fallback * 100).toFixed(dec) + '%';
         return '—';
     };
+    const sentB = Number(c.emails_sent_b) || 0;
     return `<table class="mf-table">
         <thead><tr><th>Metric</th><th>Count</th><th>Rate</th></tr></thead>
         <tbody>
             <tr>
-                <td class="mf-row-label">Total Sent</td>
+                <td class="mf-row-label">Sent (Variant A)</td>
                 <td><input class="mf-input" id="mf-sent" type="number" placeholder="0" value="${sent || ''}" oninput="recalcMetrics()"></td>
                 <td></td>
+            </tr>
+            <tr>
+                <td class="mf-row-label" style="color:var(--muted);font-size:11px;">Sent (Variant B)</td>
+                <td><input class="mf-input" id="mf-sent-b-extra" type="number" placeholder="0 if no A/B" value="${sentB || ''}" oninput="recalcMetrics()"></td>
+                <td style="font-size:11px;color:var(--brand);" id="mf-ab-combined"></td>
             </tr>
             <tr>
                 <td class="mf-row-label">Opened</td>
@@ -1683,15 +1689,7 @@ function buildSingleTableHTML(c) {
             </tr>
         </tbody>
     </table>
-    <div style="margin-top:8px;text-align:right;">
-        <button onclick="switchToABMode()" style="background:none;border:none;color:var(--brand);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;">⚡ This is an A/B test?</button>
-    </div>`;
-}
-
-function switchToABMode() {
-    const gi = id => parseInt(document.getElementById(id)?.value) || null;
-    const existing = { sent: gi('mf-sent'), opened: gi('mf-opened'), clicked: gi('mf-clicked'), unsub: gi('mf-unsub'), bounced: gi('mf-bounced') };
-    switchMetricsToAB(existing, { sent: null, opened: null, clicked: null, unsub: null, bounced: null });
+`;
 }
 
 function buildABTableHTML(dA, dB) {
@@ -1790,6 +1788,9 @@ function recalcMetrics() {
         document.getElementById('mf-reply-rate').textContent  = fmt(repld,   sent);
         document.getElementById('mf-unsub-rate').textContent  = fmt(unsub,   sent, 2);
         document.getElementById('mf-bounce-rate').textContent = fmt(bncd,    sent, 2);
+        const sentB = gi('mf-sent-b-extra');
+        const combined = document.getElementById('mf-ab-combined');
+        if (combined) combined.textContent = (sentB > 0 && sent > 0) ? `Total: ${(sent + sentB).toLocaleString()}` : '';
     }
 }
 
@@ -1823,6 +1824,7 @@ async function saveMetrics() {
     } else {
         const sent = gi('mf-sent'), opened = gi('mf-opened'), clicked = gi('mf-clicked');
         const repld = gi('mf-replied'), unsub = gi('mf-unsub'), bncd = gi('mf-bounced');
+        const sentB = gi('mf-sent-b-extra');
         update = {
             emails_sent:        sent,
             emails_opened:      opened,
@@ -1830,6 +1832,7 @@ async function saveMetrics() {
             replies:            repld,
             unsubscribed:       unsub,
             bounced:            bncd,
+            emails_sent_b:      sentB || null,
             open_rate:          (sent && opened)   ? opened  / sent   : null,
             click_rate:         (sent && clicked)  ? clicked / sent   : null,
             click_to_open_rate: (opened && clicked)? clicked / opened : null,
