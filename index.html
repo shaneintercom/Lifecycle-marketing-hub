@@ -1432,15 +1432,32 @@ function renderLibrary() {
 
     const subRowHTML = c => {
         const cat = c.category || '';
+        let d = c;
+        if (c.emails_sent_b) {
+            const sA = c.emails_sent || 0, sB = c.emails_sent_b || 0;
+            const oA = c.emails_opened || 0, oB = c.emails_opened_b || 0;
+            const cA = c.emails_clicked || 0, cB = c.emails_clicked_b || 0;
+            const totalSent = sA + sB, totalOpened = oA + oB, totalClicked = cA + cB;
+            d = {
+                ...c,
+                emails_sent: totalSent,
+                open_rate:          (totalOpened  && totalSent)   ? totalOpened  / totalSent   : c.open_rate,
+                click_rate:         (totalClicked && totalSent)   ? totalClicked / totalSent   : c.click_rate,
+                click_to_open_rate: (totalClicked && totalOpened) ? totalClicked / totalOpened : c.click_to_open_rate,
+            };
+        }
+        const abBreakdown = c.emails_sent_b
+            ? `<div style="font-size:10px;color:var(--muted);margin-top:1px;">A: ${num(c.emails_sent)} / B: ${num(c.emails_sent_b)}</div>`
+            : '';
         return `<tr class="clickable" onclick="openCampaignById('${c.campaign_id}')">
             <td style="padding-left:28px;"><span style="color:var(--muted);margin-right:6px;">↳</span>${c.campaign_name}${c.subject_line ? `<br><span style="color:var(--muted);font-size:12px;padding-left:18px;">${c.subject_line}</span>` : ''}</td>
             <td>${badge(cat)}</td>
             <td>${c.send_date || '—'}</td>
-            <td>${num(c.emails_sent)}</td>
-            <td class="${heat(c.open_rate, cat, 'open')}">${pct(c.open_rate)}</td>
-            <td class="${heat(c.click_rate, cat, 'click')}">${pct(c.click_rate)}</td>
-            <td class="${heat(c.click_to_open_rate, cat, 'ctor')}">${pct(c.click_to_open_rate)}</td>
-            <td>${pct(c.unsubscribe_rate)}</td>
+            <td>${num(d.emails_sent)}${abBreakdown}</td>
+            <td class="${heat(d.open_rate, cat, 'open')}">${pct(d.open_rate)}</td>
+            <td class="${heat(d.click_rate, cat, 'click')}">${pct(d.click_rate)}</td>
+            <td class="${heat(d.click_to_open_rate, cat, 'ctor')}">${pct(d.click_to_open_rate)}</td>
+            <td>${pct(d.unsubscribe_rate)}</td>
         </tr>`;
     };
 
