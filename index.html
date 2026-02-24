@@ -1692,14 +1692,17 @@ function buildSingleTableHTML(c) {
 `;
 }
 
-function buildABTableHTML(dA, dB) {
+function buildABTableHTML(dA, dB, nameA, nameB) {
     const v = x => (x != null ? x : '');
-    return `<table class="mf-table mf-table-ab">
+    const labelA = nameA || 'Variant A';
+    const labelB = nameB || 'Variant B';
+    return `<div id="mf-ab-winner" style="margin-bottom:8px;font-size:12px;font-weight:600;min-height:18px;"></div>
+    <table class="mf-table mf-table-ab">
         <thead>
             <tr>
                 <th>Metric</th>
-                <th class="mf-th-a" colspan="2">Variant A</th>
-                <th class="mf-th-b" colspan="2">Variant B</th>
+                <th class="mf-th-a" colspan="2" title="${labelA}">${labelA.length > 22 ? labelA.slice(0,20)+'…' : labelA}</th>
+                <th class="mf-th-b" colspan="2" title="${labelB}">${labelB.length > 22 ? labelB.slice(0,20)+'…' : labelB}</th>
             </tr>
         </thead>
         <tbody>
@@ -1742,8 +1745,8 @@ function buildABTableHTML(dA, dB) {
     </table>`;
 }
 
-function switchMetricsToAB(dA, dB) {
-    document.getElementById('mf-metrics-container').innerHTML = buildABTableHTML(dA, dB);
+function switchMetricsToAB(dA, dB, nameA, nameB) {
+    document.getElementById('mf-metrics-container').innerHTML = buildABTableHTML(dA, dB, nameA, nameB);
     recalcMetrics();
 }
 
@@ -1778,6 +1781,26 @@ function recalcMetrics() {
         document.getElementById('mf-ctor-rate-b').textContent   = fmt(cB, oB);
         document.getElementById('mf-unsub-rate-b').textContent  = fmt(uB, sB, 2);
         document.getElementById('mf-bounce-rate-b').textContent = fmt(bB, sB, 2);
+        // Winner callout
+        const winnerEl = document.getElementById('mf-ab-winner');
+        if (winnerEl && sA && sB) {
+            const crA = sA ? cA / sA : 0, crB = sB ? cB / sB : 0;
+            const orA = sA ? oA / sA : 0, orB = sB ? oB / sB : 0;
+            const useClick = cA > 0 || cB > 0;
+            const rA = useClick ? crA : orA, rB = useClick ? crB : orB;
+            const metric = useClick ? 'click rate' : 'open rate';
+            const thA = document.querySelector('.mf-th-a')?.textContent || 'Variant A';
+            const thB = document.querySelector('.mf-th-b')?.textContent || 'Variant B';
+            if (rA > 0 || rB > 0) {
+                if (Math.abs(rA - rB) < 0.001) {
+                    winnerEl.innerHTML = `<span style="color:var(--muted);">⚖️ Too close to call on ${metric}</span>`;
+                } else if (rA > rB) {
+                    winnerEl.innerHTML = `<span style="color:var(--success);">🏆 ${thA} winning on ${metric} (${(rA*100).toFixed(1)}% vs ${(rB*100).toFixed(1)}%)</span>`;
+                } else {
+                    winnerEl.innerHTML = `<span style="color:var(--brand);">🏆 ${thB} winning on ${metric} (${(rB*100).toFixed(1)}% vs ${(rA*100).toFixed(1)}%)</span>`;
+                }
+            } else { winnerEl.innerHTML = ''; }
+        }
     } else {
         // Single mode
         const sent = gi('mf-sent'), opened = gi('mf-opened'), clicked = gi('mf-clicked');
@@ -2042,6 +2065,24 @@ function combineCSVMatches() {
     if (checked.length < 2) return;
     const resultDiv = document.getElementById('mf-csv-result');
 
+    // If exactly 2 selected, check if they're A/B variants of the same campaign
+    if (checked.length === 2) {
+        const abRe = s => (s || '').match(/\s*[-–—(]?\s*(variant|version|test|v)?\s*([ab])\s*\)?$/i);
+        const names = checked.map(cb => (window._csvAllNames || [])[parseInt(cb.dataset.idx)] || '');
+        const nameA = names.find(n => { const m = abRe(n); return m && m[2].toLowerCase() === 'a'; });
+        const nameB = names.find(n => { const m = abRe(n); return m && m[2].toLowerCase() === 'b'; });
+        if (nameA && nameB) {
+            const rA = parseIntercomCSV(_lastCSVText, nameA);
+            const rB = parseIntercomCSV(_lastCSVText, nameB);
+            const dA = rA ? (rA.type === 'single' ? rA.data : rA.variantA?.data) : null;
+            const dB = rB ? (rB.type === 'single' ? rB.data : rB.variantB?.data) : null;
+            if (dA && dB) {
+                showABDetected({ type: 'ab', variantA: { name: nameA, data: dA }, variantB: { name: nameB, data: dB } }, resultDiv);
+                return;
+            }
+        }
+    }
+
     const combined = { sent: null, opened: null, clicked: null, replied: null, unsub: null, bounced: null };
     const usedNames = [];
 
@@ -2099,8 +2140,8 @@ function fillMetricInputs(d) {
 
 function showABDetected(result, container) {
     window._abCSVData = { ...result, campaignName: document.querySelector('#cal-modal-content .cm-title')?.textContent || '' };
-    // Auto-switch the metrics table to side-by-side AB view
-    switchMetricsToAB(result.variantA.data, result.variantB.data);
+    // Auto-switch the metrics table to side-by-side AB view, passing actual variant names
+    switchMetricsToAB(result.variantA.data, result.variantB.data, result.variantA.name, result.variantB.name);
     container.innerHTML = `
         <div class="ab-box" style="padding:10px 14px;">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
