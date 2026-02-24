@@ -2210,21 +2210,24 @@ function showABDetected(result, container) {
     window._abCSVData = { ...result, campaignName: document.querySelector('#cal-modal-content .cm-title')?.textContent || '' };
     // Auto-switch the metrics table to side-by-side AB view, passing actual variant names
     switchMetricsToAB(result.variantA.data, result.variantB.data, result.variantA.name, result.variantB.name);
-    const subA = result.variantA.data?.subject;
-    const subB = result.variantB.data?.subject;
-    const subjectHint = (subA || subB)
-        ? `<div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5;">
-            ${subA ? `<span style="color:var(--brand);font-weight:600;">A:</span> ${subA}` : ''}
-            ${subA && subB ? ' &nbsp;·&nbsp; ' : ''}
-            ${subB ? `<span style="color:#86efac;font-weight:600;">B:</span> ${subB}` : ''}
-           </div>` : '';
+    const preA = result.variantA.data?.subject || '';
+    const preB = result.variantB.data?.subject || '';
     container.innerHTML = `
         <div class="ab-box" style="padding:10px 14px;">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                 <span style="font-size:12px;font-weight:700;color:var(--brand);">⚡ A/B test detected — both variants filled above</span>
                 <button class="btn btn-primary" style="font-size:12px;padding:6px 14px;" onclick="saveAsABTest()">Save to A/B Tests &#8594;</button>
             </div>
-            ${subjectHint}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+                <div>
+                    <div style="font-size:10px;font-weight:700;color:var(--brand);margin-bottom:3px;">VARIANT A SUBJECT LINE</div>
+                    <input id="ab-subject-a" type="text" placeholder="e.g. Your CX Score is ready" value="${preA}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);">
+                </div>
+                <div>
+                    <div style="font-size:10px;font-weight:700;color:#86efac;margin-bottom:3px;">VARIANT B SUBJECT LINE</div>
+                    <input id="ab-subject-b" type="text" placeholder="e.g. Here's how customers rate us" value="${preB}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);">
+                </div>
+            </div>
             <div id="ab-save-msg" style="font-size:12px;margin-top:6px;"></div>
         </div>`;
 }
@@ -2248,17 +2251,19 @@ async function saveAsABTest() {
         return;
     }
 
+    const subjectA = document.getElementById('ab-subject-a')?.value.trim() || a.data.subject || null;
+    const subjectB = document.getElementById('ab-subject-b')?.value.trim() || b.data.subject || null;
     const row = {
         test_name:            d.campaignName,
         test_date:            sendDate,
         variant_a_name:       a.name,
         variant_a_open_rate:  rate(a.data.opened,  a.data.sent),
         variant_a_click_rate: rate(a.data.clicked, a.data.sent),
-        variant_a_content:    a.data.subject || null,
+        variant_a_content:    subjectA,
         variant_b_name:       b.name,
         variant_b_open_rate:  rate(b.data.opened,  b.data.sent),
         variant_b_click_rate: rate(b.data.clicked, b.data.sent),
-        variant_b_content:    b.data.subject || null,
+        variant_b_content:    subjectB,
         sent_a:               a.data.sent || null,
         sent_b:               b.data.sent || null,
     };
