@@ -1602,10 +1602,12 @@ document.addEventListener('click', e => {
 
 let _modalCampaignId     = null;
 let _modalParentCampaign = null;
+let _modalCampaignData   = null;
 
 function showCampaignModal(c) {
     _modalCampaignId     = c.campaign_id;
     _modalParentCampaign = c.parent_campaign || null;
+    _modalCampaignData   = c;
 
     // Parse notes: stored as "P1 · Q1FY27 · In progress"
     const noteParts = (c.notes || '').split(' · ').filter(Boolean);
@@ -1635,6 +1637,7 @@ function showCampaignModal(c) {
                 { sent: c.emails_sent_b, opened: c.emails_opened_b, clicked: c.emails_clicked_b, unsub: null, bounced: null }
               )
             : buildSingleTableHTML(c)}</div>
+        <div id="mf-ab-link-area"></div>
         <hr class="cm-divider">
         <button class="csv-toggle" onclick="toggleCSVImport()">↓ Fill from Intercom CSV export</button>
         <div id="mf-csv-body" class="csv-import-body" style="display:none;">
@@ -1651,6 +1654,7 @@ function showCampaignModal(c) {
     document.getElementById('cal-modal-overlay').style.display = 'block';
     document.getElementById('cal-modal').style.display = 'block';
     recalcMetrics();
+    if (c.emails_sent_b || c.emails_opened_b || c.emails_clicked_b) loadABTestLink(c.campaign_name);
 }
 
 function buildSingleTableHTML(c) {
@@ -1779,6 +1783,53 @@ function closeCampaignModal() {
     }
 }
 
+async function loadABTestLink(campaignName) {
+    const area = document.getElementById('mf-ab-link-area');
+    if (!area) return;
+    const { data } = await db.from('lifecycle_ab_tests').select('test_id,winner,element_tested,winner_notes').eq('test_name', campaignName).limit(1);
+    if (!area) return; // modal may have closed
+    if (data && data.length > 0) {
+        const t = data[0];
+        const winnerLabel = t.winner && t.winner !== 'N' ? `Variant ${t.winner} won` : '';
+        const hasInsights = !!(t.element_tested || t.winner_notes);
+        area.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0 4px;">
+            <span style="font-size:12px;color:var(--muted);">A/B test logged${winnerLabel ? ` · <span style="color:var(--success);font-weight:600;">✓ ${winnerLabel}</span>` : ''}${hasInsights ? ' · insights added' : ' · no insights yet'}</span>
+            <button class="btn-sm" onclick="openABTestFromCampaign('${t.test_id}')">${hasInsights ? '→ View A/B insights' : '+ Add insights'}</button>
+        </div>`;
+    } else {
+        area.innerHTML = `<div style="padding:10px 0 4px;">
+            <button class="btn-sm" onclick="createAndOpenABTest()" style="color:var(--brand);border-color:var(--brand);">+ Log this as an A/B test →</button>
+        </div>`;
+    }
+}
+
+async function openABTestFromCampaign(testId) {
+    const { data } = await db.from('lifecycle_ab_tests').select('*').eq('test_id', testId).limit(1);
+    if (data && data.length > 0) showABTestModal(data[0]);
+}
+
+async function createAndOpenABTest() {
+    const c = _modalCampaignData;
+    if (!c) return;
+    const rate = (n, d) => (n && d) ? n / d : null;
+    const row = {
+        test_name:            c.campaign_name,
+        test_date:            c.send_date || null,
+        variant_a_open_rate:  c.open_rate,
+        variant_a_click_rate: c.click_rate,
+        variant_b_open_rate:  c.emails_opened_b && c.emails_sent_b ? c.emails_opened_b / c.emails_sent_b : null,
+        variant_b_click_rate: c.emails_clicked_b && c.emails_sent_b ? c.emails_clicked_b / c.emails_sent_b : null,
+        sent_a:               c.emails_sent || null,
+        sent_b:               c.emails_sent_b || null,
+    };
+    const aw = autoDetectWinner(row);
+    if (aw.pick !== 'N') row.winner = aw.pick;
+    const { data, error } = await db.from('lifecycle_ab_tests').insert(row).select().single();
+    if (error || !data) { alert('Error creating A/B test record: ' + (error?.message || 'unknown')); return; }
+    // Update the link area to reflect it now exists
+    loadABTestLink(c.campaign_name);
+    showABTestModal(data);
+}
 
 function recalcMetrics() {
     const fmt = (n, d, dec = 1) => d > 0 ? (n / d * 100).toFixed(dec) + '%' : '—';
