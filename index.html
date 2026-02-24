@@ -1682,7 +1682,16 @@ function buildSingleTableHTML(c) {
                 <td><span class="mf-rate" id="mf-bounce-rate">${ir(bncd,sent,2,c.bounce_rate)}</span></td>
             </tr>
         </tbody>
-    </table>`;
+    </table>
+    <div style="margin-top:8px;text-align:right;">
+        <button onclick="switchToABMode()" style="background:none;border:none;color:var(--brand);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;">⚡ This is an A/B test?</button>
+    </div>`;
+}
+
+function switchToABMode() {
+    const gi = id => parseInt(document.getElementById(id)?.value) || null;
+    const existing = { sent: gi('mf-sent'), opened: gi('mf-opened'), clicked: gi('mf-clicked'), unsub: gi('mf-unsub'), bounced: gi('mf-bounced') };
+    switchMetricsToAB(existing, { sent: null, opened: null, clicked: null, unsub: null, bounced: null });
 }
 
 function buildABTableHTML(dA, dB) {
