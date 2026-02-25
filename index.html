@@ -2602,6 +2602,18 @@ async function syncFromCoda() {
     const newOnes  = deduped.filter(r => !r.already);
     const skipOnes = deduped.filter(r => r.already);
 
+    // Always update metadata for existing records immediately — don't wait for confirm
+    const existingOnes = deduped.filter(r => r.already && r.name && r.goLive);
+    await Promise.all(existingOnes.map(r =>
+        db.from('lifecycle_campaigns').update({
+            category:        r.category,
+            created_by:      r.owners || null,
+            notes:           [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
+            parent_campaign: r.parent || null,
+        }).eq('campaign_name', r.name).eq('send_date', r.goLive)
+    ));
+    if (existingOnes.length) await loadCalendar();
+
     panel.innerHTML = `
         <div class="sync-panel">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -2654,20 +2666,9 @@ async function confirmCodaSync() {
         }
     }
 
-    // Update metadata (category, owner, notes, parent) for already-existing records
-    const existingOnes = all.filter(r => r.already && r.name && r.goLive);
-    await Promise.all(existingOnes.map(r =>
-        db.from('lifecycle_campaigns').update({
-            category:        r.category,
-            created_by:      r.owners || null,
-            notes:           [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
-            parent_campaign: r.parent || null,
-        }).eq('campaign_name', r.name).eq('send_date', r.goLive)
-    ));
-
     const msg = queue.length
-        ? `✓ ${queue.length} new campaign${queue.length > 1 ? 's' : ''} imported, ${existingOnes.length} existing updated.`
-        : `✓ All ${existingOnes.length} campaigns updated from Coda.`;
+        ? `✓ ${queue.length} new campaign${queue.length > 1 ? 's' : ''} imported.`
+        : `✓ Sync complete.`;
     panel.innerHTML = `<div class="sync-panel"><div class="alert alert-success">${msg} Refreshing...</div></div>`;
     window._codaSyncQueue = [];
     window._codaSyncAll   = [];
