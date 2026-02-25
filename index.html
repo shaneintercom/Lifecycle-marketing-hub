@@ -360,6 +360,7 @@
             <div class="dash-kpi">
                 <div class="kpi-label">Emails Sent Q1</div>
                 <div class="kpi-value" id="kpi-sent">—</div>
+                <div class="kpi-sub" id="kpi-sent-delta"></div>
             </div>
             <div class="dash-kpi">
                 <div class="kpi-label">Avg Open Rate Q1</div>
@@ -1023,17 +1024,19 @@ function val(id)    { return document.getElementById(id).value.trim() || null; }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
-    const [{ data: q1Data }, { data: allData }, { data: abData }, { data: backlogData }] = await Promise.all([
+    const [{ data: q1Data }, { data: q4Data }, { data: allData }, { data: abData }, { data: backlogData }] = await Promise.all([
         db.from('lifecycle_campaigns').select('*').order('send_date', { ascending: false }).gte('send_date', '2026-02-01'),
+        db.from('lifecycle_campaigns').select('emails_sent,emails_sent_b,open_rate,click_rate,click_to_open_rate,parent_campaign').gte('send_date', '2025-11-01').lt('send_date', '2026-02-01'),
         db.from('lifecycle_campaigns').select('category,open_rate,click_rate,click_to_open_rate,emails_sent'),
         db.from('lifecycle_ab_tests').select('test_id,test_name,winner,test_date,variant_a_name,variant_b_name').gte('test_date', '2026-02-01').order('test_date', { ascending: false }),
         db.from('lifecycle_experiment_backlog').select('id,status'),
     ]);
 
     const q1  = q1Data  || [];
+    const q4  = q4Data  || [];
     const all = allData || [];
 
-    renderDashKPIs(q1, all);
+    renderDashKPIs(q1, q4);
     renderTopPerformers(q1);
     renderABSummary(abData || []);
     renderBacklogSnapshot(backlogData || []);
@@ -1041,35 +1044,53 @@ async function loadDashboard() {
     renderUpcomingLaunches();
 }
 
-function renderDashKPIs(q1, all) {
+function renderDashKPIs(q1, q4) {
     const avgF = (rows, field) => {
-        const vals = rows.filter(r => r[field] != null).map(r => r[field]);
+        const vals = rows.filter(r => r[field] != null && !r.parent_campaign).map(r => r[field]);
         return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
     };
-    const totalSent = q1.reduce((s, r) => s + (r.emails_sent || 0), 0);
-    const q1Open  = avgF(q1,  'open_rate');
-    const q1Click = avgF(q1,  'click_rate');
-    const q1CTOR  = avgF(q1,  'click_to_open_rate');
-    const allOpen  = avgF(all, 'open_rate');
-    const allClick = avgF(all, 'click_rate');
-    const allCTOR  = avgF(all, 'click_to_open_rate');
+    const sentTotal = rows => rows.filter(r => !r.parent_campaign).reduce((s, r) => s + (r.emails_sent || 0) + (r.emails_sent_b || 0), 0);
 
-    const delta = (q1val, allval) => {
-        if (q1val == null || allval == null) return `<span class="kpi-flat">vs all time</span>`;
-        const d = (q1val - allval) * 100;
+    const q1Sent  = sentTotal(q1);
+    const q4Sent  = sentTotal(q4);
+    const q1Open  = avgF(q1, 'open_rate');
+    const q1Click = avgF(q1, 'click_rate');
+    const q1CTOR  = avgF(q1, 'click_to_open_rate');
+    const q4Open  = avgF(q4, 'open_rate');
+    const q4Click = avgF(q4, 'click_rate');
+    const q4CTOR  = avgF(q4, 'click_to_open_rate');
+
+    const hasQ4 = q4.length > 0;
+
+    // pp delta for rates
+    const rateDelta = (q1val, q4val) => {
+        if (q1val == null) return '';
+        if (!hasQ4 || q4val == null) return `<span class="kpi-flat">no Q4 data yet</span>`;
+        const d = (q1val - q4val) * 100;
         const sign = d > 0 ? '+' : '';
         const cls  = d > 0 ? 'kpi-up' : d < 0 ? 'kpi-down' : 'kpi-flat';
-        return `<span class="${cls}">${sign}${d.toFixed(1)}pp vs all time</span>`;
+        return `<span class="${cls}">${sign}${d.toFixed(1)}pp vs Q4</span>`;
     };
+
+    // % change for volume
+    const sentDelta = (q1val, q4val) => {
+        if (!hasQ4 || !q4val) return `<span class="kpi-flat">no Q4 data yet</span>`;
+        const pct = ((q1val - q4val) / q4val) * 100;
+        const sign = pct > 0 ? '+' : '';
+        const cls  = pct > 0 ? 'kpi-up' : pct < 0 ? 'kpi-down' : 'kpi-flat';
+        return `<span class="${cls}">${sign}${pct.toFixed(0)}% vs Q4 (${q4val.toLocaleString()})</span>`;
+    };
+
     const fmt = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
 
-    document.getElementById('kpi-sent').textContent       = totalSent > 0 ? totalSent.toLocaleString() : '—';
-    document.getElementById('kpi-open').textContent       = fmt(q1Open);
-    document.getElementById('kpi-click').textContent      = fmt(q1Click);
-    document.getElementById('kpi-ctor').textContent       = fmt(q1CTOR);
-    document.getElementById('kpi-open-delta').innerHTML   = delta(q1Open,  allOpen);
-    document.getElementById('kpi-click-delta').innerHTML  = delta(q1Click, allClick);
-    document.getElementById('kpi-ctor-delta').innerHTML   = delta(q1CTOR,  allCTOR);
+    document.getElementById('kpi-sent').textContent        = q1Sent > 0 ? q1Sent.toLocaleString() : '—';
+    document.getElementById('kpi-open').textContent        = fmt(q1Open);
+    document.getElementById('kpi-click').textContent       = fmt(q1Click);
+    document.getElementById('kpi-ctor').textContent        = fmt(q1CTOR);
+    document.getElementById('kpi-sent-delta').innerHTML    = sentDelta(q1Sent, q4Sent);
+    document.getElementById('kpi-open-delta').innerHTML    = rateDelta(q1Open,  q4Open);
+    document.getElementById('kpi-click-delta').innerHTML   = rateDelta(q1Click, q4Click);
+    document.getElementById('kpi-ctor-delta').innerHTML    = rateDelta(q1CTOR,  q4CTOR);
 }
 
 function renderTopPerformers(q1) {
