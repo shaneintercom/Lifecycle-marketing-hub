@@ -2131,9 +2131,74 @@ function manualCSVMatch(idx) {
         fillMetricInputs(result.data);
         recalcMetrics();
         resultDiv.innerHTML = `<p style="color:var(--success);font-size:12px;">✓ Matched to "<strong>${name}</strong>" — review metrics above and hit Save Metrics.</p>`;
+        showCohortOption(name);
     } else {
         showABDetected(result, resultDiv);
     }
+}
+
+function showCohortOption(seriesName) {
+    const parentName = _modalCampaignData?.campaign_name || '';
+    if (!parentName || seriesName === parentName) return;
+    const resultDiv = document.getElementById('mf-csv-result');
+    if (!resultDiv) return;
+    const div = document.createElement('div');
+    div.id = 'cohort-option';
+    div.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px solid var(--border);';
+    div.innerHTML = `
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Or save as a separate cohort row under <strong style="color:var(--text);">${parentName}</strong>:</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+            <input id="cohort-name-input" type="text" value="${seriesName.replace(/"/g, '&quot;')}"
+                placeholder="Cohort name"
+                style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:12px;color:var(--text);">
+            <button class="btn btn-primary" style="font-size:12px;padding:5px 14px;white-space:nowrap;" onclick="saveCohortRecord()">Save as cohort &#8594;</button>
+        </div>
+        <div id="cohort-save-msg" style="font-size:11px;margin-top:5px;min-height:16px;"></div>
+    `;
+    resultDiv.appendChild(div);
+}
+
+async function saveCohortRecord() {
+    const parentData = _modalCampaignData;
+    if (!parentData) return;
+    const seriesName = document.getElementById('cohort-name-input')?.value.trim();
+    if (!seriesName) return;
+    const msgEl = document.getElementById('cohort-save-msg');
+    const btn   = document.querySelector('#cohort-option .btn.btn-primary');
+    if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+
+    const gi = id => parseInt(document.getElementById(id)?.value) || null;
+    const sent = gi('mf-sent'), opened = gi('mf-opened'), clicked = gi('mf-clicked');
+    const unsub = gi('mf-unsub'), bncd = gi('mf-bounced');
+
+    const { error } = await db.from('lifecycle_campaigns').insert({
+        campaign_name:      seriesName,
+        parent_campaign:    parentData.campaign_name,
+        category:           parentData.category,
+        send_date:          parentData.send_date,
+        created_by:         parentData.created_by,
+        emails_sent:        sent,
+        emails_opened:      opened,
+        emails_clicked:     clicked,
+        unsubscribed:       unsub,
+        bounced:            bncd,
+        open_rate:          (sent && opened)   ? opened  / sent   : null,
+        click_rate:         (sent && clicked)  ? clicked / sent   : null,
+        click_to_open_rate: (opened && clicked)? clicked / opened : null,
+        unsubscribe_rate:   (sent && unsub)    ? unsub   / sent   : null,
+        bounce_rate:        (sent && bncd)     ? bncd    / sent   : null,
+    });
+
+    if (error) {
+        if (msgEl) msgEl.innerHTML = `<span style="color:#fca5a5;">Error: ${error.message}</span>`;
+        if (btn) { btn.textContent = 'Save as cohort →'; btn.disabled = false; }
+        return;
+    }
+
+    if (msgEl) msgEl.innerHTML = `<span style="color:var(--success);">✓ Saved — visible in Campaign Library as a cohort under "${parentData.campaign_name}".</span>`;
+    if (btn) { btn.textContent = '✓ Saved!'; }
+    // Remove the form so they can't double-save
+    document.getElementById('cohort-name-input').disabled = true;
 }
 
 function updateCombineBtn() {
