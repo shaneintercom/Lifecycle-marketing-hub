@@ -1046,10 +1046,10 @@ async function loadDashboard() {
 
 function renderDashKPIs(q1, q4) {
     const avgF = (rows, field) => {
-        const vals = rows.filter(r => r[field] != null && !r.parent_campaign).map(r => r[field]);
+        const vals = rows.filter(r => r[field] != null).map(r => r[field]);
         return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
     };
-    const sentTotal = rows => rows.filter(r => !r.parent_campaign).reduce((s, r) => s + (r.emails_sent || 0) + (r.emails_sent_b || 0), 0);
+    const sentTotal = rows => rows.reduce((s, r) => s + (r.emails_sent || 0) + (r.emails_sent_b || 0), 0);
 
     const q1Sent  = sentTotal(q1);
     const q4Sent  = sentTotal(q4);
