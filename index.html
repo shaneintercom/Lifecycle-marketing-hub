@@ -2480,10 +2480,15 @@ async function silentSyncFromCoda() {
         showSyncToast(`↓ Synced ${newOnes.length} new campaign${newOnes.length > 1 ? 's' : ''} from Coda`);
     }
 
-    // Always backfill parent_campaign on existing records from Coda data
-    const withParent = allDeduped.filter(r => r.parent && r.name);
-    await Promise.all(withParent.map(r =>
-        db.from('lifecycle_campaigns').update({ parent_campaign: r.parent }).eq('campaign_name', r.name)
+    // Update metadata for already-existing records
+    const existingOnes = allDeduped.filter(r => existingKeys.has(`${r.name}|${r.goLive}`) && r.name && r.goLive);
+    await Promise.all(existingOnes.map(r =>
+        db.from('lifecycle_campaigns').update({
+            category:        r.category,
+            created_by:      r.owners || null,
+            notes:           [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
+            parent_campaign: r.parent || null,
+        }).eq('campaign_name', r.name).eq('send_date', r.goLive)
     ));
 
     await loadCalendar();
@@ -2631,15 +2636,20 @@ async function confirmCodaSync() {
         }
     }
 
-    // Backfill parent_campaign on ALL existing records using the Coda parent map
-    const withParent = all.filter(r => r.parent && r.name);
-    await Promise.all(withParent.map(r =>
-        db.from('lifecycle_campaigns').update({ parent_campaign: r.parent }).eq('campaign_name', r.name)
+    // Update metadata (category, owner, notes, parent) for already-existing records
+    const existingOnes = all.filter(r => r.already && r.name && r.goLive);
+    await Promise.all(existingOnes.map(r =>
+        db.from('lifecycle_campaigns').update({
+            category:        r.category,
+            created_by:      r.owners || null,
+            notes:           [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
+            parent_campaign: r.parent || null,
+        }).eq('campaign_name', r.name).eq('send_date', r.goLive)
     ));
 
     const msg = queue.length
-        ? `✓ ${queue.length} campaign${queue.length > 1 ? 's' : ''} imported and parent info updated.`
-        : `✓ Parent info updated for all campaigns.`;
+        ? `✓ ${queue.length} new campaign${queue.length > 1 ? 's' : ''} imported, ${existingOnes.length} existing updated.`
+        : `✓ All ${existingOnes.length} campaigns updated from Coda.`;
     panel.innerHTML = `<div class="sync-panel"><div class="alert alert-success">${msg} Refreshing...</div></div>`;
     window._codaSyncQueue = [];
     window._codaSyncAll   = [];
