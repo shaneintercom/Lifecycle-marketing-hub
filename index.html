@@ -2800,16 +2800,21 @@ async function confirmCodaSync() {
 
         for (const r of queue) {
             const matches = existingByName[r.name] || [];
-            // A metrics-free record with a different date = date was moved in Coda
-            const stale = matches.find(e => e.send_date !== r.goLive && e.open_rate == null);
-            if (stale) {
+            // All no-metrics records with a different date = stale from a date change
+            const staleRecords = matches.filter(e => e.send_date !== r.goLive && e.open_rate == null);
+            if (staleRecords.length > 0) {
+                // Update the first stale record to the new date
                 await db.from('lifecycle_campaigns').update({
                     send_date:       r.goLive,
                     category:        r.category,
                     created_by:      r.owners || null,
                     notes:           [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
                     parent_campaign: r.parent || null,
-                }).eq('campaign_id', stale.campaign_id);
+                }).eq('campaign_id', staleRecords[0].campaign_id);
+                // Delete any extra stale records beyond the first (prevents duplicates)
+                for (const extra of staleRecords.slice(1)) {
+                    await db.from('lifecycle_campaigns').delete().eq('campaign_id', extra.campaign_id);
+                }
                 dateUpdated++;
             } else {
                 toInsert.push(r);
