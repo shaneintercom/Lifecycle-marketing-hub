@@ -117,8 +117,8 @@ module.exports = async function (req, res) {
         cursor = data.pages.next.starting_after;
       }
 
-      // Cap at 15 and fetch all in one parallel batch to stay within timeout
-      const toFetch = allConvs.slice(0, 15);
+      // Cap at 50 and fetch all in one parallel batch to stay within timeout
+      const toFetch = allConvs.slice(0, 50);
       const fullConvs = await Promise.all(
         toFetch.map(c =>
           fetch(`https://api.intercom.io/conversations/${c.id}`, {

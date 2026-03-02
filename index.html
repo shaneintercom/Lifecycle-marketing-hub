@@ -3898,11 +3898,38 @@ async function searchSeries() {
         document.getElementById('sr-search-status').textContent =
             `Found ${_srSources.length} unique message${_srSources.length !== 1 ? 's' : ''} (from ${(data.totalConversations || 0).toLocaleString()} conversations).`;
         renderSRSources();
+        prefetchAllReplyCounts();
     } catch (err) {
         document.getElementById('sr-search-status').textContent = 'Error: ' + err.message;
     } finally {
         btn.disabled = false;
         btn.textContent = 'Search';
+    }
+}
+
+async function prefetchAllReplyCounts() {
+    // Sequentially fetch replies for each source so cards show real counts upfront.
+    // Also caches full reply data so clicking a card loads instantly.
+    for (let i = 0; i < _srSources.length; i++) {
+        const s = _srSources[i];
+        if (s.loadedTotal != null) continue; // already fetched
+        try {
+            const res = await fetch('/api/intercom-series', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: 'replies', sourceId: s.sourceId }),
+            });
+            const data = await res.json();
+            if (!res.ok || data.error) continue;
+            _srSources[i].loadedReplies  = (data.replies || []).length;
+            _srSources[i].loadedSampled  = Math.min(data.total, 50);
+            _srSources[i].loadedTotal    = data.total;
+            _srSources[i]._cachedReplies = data.replies || [];
+            // Re-render if sources list is still visible
+            if (document.getElementById('sr-sources').style.display !== 'none') {
+                renderSRSources();
+            }
+        } catch(e) { /* skip on error */ }
     }
 }
 
@@ -3963,35 +3990,24 @@ async function loadSRReplies(idx) {
 
     _srSourceCtx = src.subject ? `Subject: "${src.subject}" · Sender: ${src.senderName}` : `Sender: ${src.senderName} · Message: ${src.bodySnippet}`;
 
-    try {
-        const res = await fetch('/api/intercom-series', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: 'replies', sourceId: src.sourceId }),
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || 'Failed to load replies');
-
-        _srReplies = data.replies || [];
-        const sampled = Math.min(data.total, 15);
+    const renderReplies = (replies, total) => {
+        const sampled = Math.min(total, 50);
         const metaParts = [
             `Sent by: ${src.senderName}`,
-            `${_srReplies.length} customer repl${_srReplies.length !== 1 ? 'ies' : 'y'} found`,
-            `sampled ${sampled} of ${data.total} conversation${data.total !== 1 ? 's' : ''}`,
+            `${replies.length} customer repl${replies.length !== 1 ? 'ies' : 'y'} found`,
+            `sampled ${sampled} of ${total} conversation${total !== 1 ? 's' : ''}`,
         ];
         document.getElementById('sr-selected-meta').textContent = metaParts.join(' · ');
-
-        // Cache reply stats on the source so the card shows them when going back
-        _srSources[idx].loadedReplies  = _srReplies.length;
+        _srSources[idx].loadedReplies  = replies.length;
         _srSources[idx].loadedSampled  = sampled;
-        _srSources[idx].loadedTotal    = data.total;
-
-        if (!_srReplies.length) {
+        _srSources[idx].loadedTotal    = total;
+        _srSources[idx]._cachedReplies = replies;
+        _srReplies = replies;
+        if (!replies.length) {
             tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted);">No customer replies found for this message.</td></tr>';
             return;
         }
-
-        tbody.innerHTML = _srReplies.map(r => {
+        tbody.innerHTML = replies.map(r => {
             const date = r.replyDate ? new Date(r.replyDate * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
             const isTruncated = r.replyText.length > 280;
             const text = isTruncated ? r.replyText.slice(0, 280) + '…' : r.replyText;
@@ -4007,6 +4023,23 @@ async function loadSRReplies(idx) {
                 <td style="white-space:nowrap;font-size:12px;color:var(--muted);">${date}</td>
             </tr>`;
         }).join('');
+    };
+
+    // Use cached data if the prefetch already loaded this source
+    if (src._cachedReplies) {
+        renderReplies(src._cachedReplies, src.loadedTotal);
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/intercom-series', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'replies', sourceId: src.sourceId }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'Failed to load replies');
+        renderReplies(data.replies || [], data.total);
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="3" style="padding:14px;color:#fca5a5;">Error: ${escHtml(err.message)}</td></tr>`;
     }
