@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lifecycle Marketing Hub</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <style>
         :root {
             --brand: #818cf8;
@@ -361,21 +362,25 @@
                 <div class="kpi-label">Emails Sent Q1</div>
                 <div class="kpi-value" id="kpi-sent">—</div>
                 <div class="kpi-sub" id="kpi-sent-delta"></div>
+                <div id="kpi-sent-spark"></div>
             </div>
             <div class="dash-kpi">
                 <div class="kpi-label">Avg Open Rate Q1</div>
                 <div class="kpi-value" id="kpi-open">—</div>
                 <div class="kpi-sub" id="kpi-open-delta"></div>
+                <div id="kpi-open-spark"></div>
             </div>
             <div class="dash-kpi">
                 <div class="kpi-label">Avg Click Rate Q1</div>
                 <div class="kpi-value" id="kpi-click">—</div>
                 <div class="kpi-sub" id="kpi-click-delta"></div>
+                <div id="kpi-click-spark"></div>
             </div>
             <div class="dash-kpi">
                 <div class="kpi-label">Avg CTOR Q1</div>
                 <div class="kpi-value" id="kpi-ctor">—</div>
                 <div class="kpi-sub" id="kpi-ctor-delta"></div>
+                <div id="kpi-ctor-spark"></div>
             </div>
         </div>
 
@@ -1024,12 +1029,13 @@ function val(id)    { return document.getElementById(id).value.trim() || null; }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
-    const [{ data: q1Data }, { data: q4Data }, { data: allData }, { data: abData }, { data: backlogData }] = await Promise.all([
+    const [{ data: q1Data }, { data: q4Data }, { data: allData }, { data: abData }, { data: backlogData }, { data: trendData }] = await Promise.all([
         db.from('lifecycle_campaigns').select('*').order('send_date', { ascending: false }).gte('send_date', '2026-02-01'),
         db.from('lifecycle_campaigns').select('emails_sent,emails_sent_b,open_rate,click_rate,click_to_open_rate,parent_campaign').gte('send_date', '2025-11-01').lt('send_date', '2026-02-01'),
         db.from('lifecycle_campaigns').select('category,open_rate,click_rate,click_to_open_rate,emails_sent'),
         db.from('lifecycle_ab_tests').select('test_id,test_name,winner,test_date,variant_a_name,variant_b_name').gte('test_date', '2026-02-01').order('test_date', { ascending: false }),
         db.from('lifecycle_experiment_backlog').select('id,status'),
+        db.from('lifecycle_campaigns').select('send_date,open_rate,click_rate,click_to_open_rate,emails_sent,emails_sent_b').gte('send_date', '2025-10-01').not('open_rate', 'is', null),
     ]);
 
     const q1  = q1Data  || [];
@@ -1037,6 +1043,7 @@ async function loadDashboard() {
     const all = allData || [];
 
     renderDashKPIs(q1, q4);
+    renderKPISparklines(trendData || []);
     renderTopPerformers(q1);
     renderABSummary(abData || []);
     renderBacklogSnapshot(backlogData || []);
@@ -1091,6 +1098,111 @@ function renderDashKPIs(q1, q4) {
     document.getElementById('kpi-open-delta').innerHTML    = rateDelta(q1Open,  q4Open);
     document.getElementById('kpi-click-delta').innerHTML   = rateDelta(q1Click, q4Click);
     document.getElementById('kpi-ctor-delta').innerHTML    = rateDelta(q1CTOR,  q4CTOR);
+}
+
+function showSparkTip(evt, label, val, color) {
+    const tip = document.getElementById('spark-tip');
+    tip.innerHTML = `<div style="font-weight:700;font-size:13px;color:${color};">${val}</div><div style="font-size:10px;color:#94a3b8;margin-top:1px;">${label}</div>`;
+    tip.style.display = 'block';
+    _posSparkTip(evt);
+}
+function _posSparkTip(evt) {
+    const tip = document.getElementById('spark-tip');
+    const x = Math.min(evt.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+    const y = Math.max(evt.clientY - 48, 4);
+    tip.style.left = x + 'px';
+    tip.style.top  = y + 'px';
+}
+function hideSparkTip() { document.getElementById('spark-tip').style.display = 'none'; }
+
+function makeSparklineSVG(data, labels, color, gradId, fmtFn) {
+    const valid = data.filter(d => d != null);
+    if (valid.length < 2) return '';
+    const min = Math.min(...valid);
+    const max = Math.max(...valid);
+    const range = max - min;
+    const W = 200, H = 36, pad = 3;
+    const pts = data.map((v, i) => ({
+        x: pad + (i / (data.length - 1)) * (W - pad * 2),
+        y: v != null ? (range === 0 ? pad + (H - pad * 2) / 2 : pad + (H - pad * 2) - ((v - min) / range) * (H - pad * 2)) : null,
+    }));
+    let line = '';
+    let open = false;
+    for (const p of pts) {
+        if (p.y == null) { open = false; continue; }
+        line += open ? ` L${p.x.toFixed(1)},${p.y.toFixed(1)}` : `M${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+        open = true;
+    }
+    const first = pts.find(p => p.y != null);
+    const last  = [...pts].reverse().find(p => p.y != null);
+    const fill  = `${line} L${last.x.toFixed(1)},${H} L${first.x.toFixed(1)},${H} Z`;
+
+    // Use data-* attributes — avoids escaping issues with inline JS handlers
+    const colW = W / data.length;
+    let extras = '';
+    data.forEach((v, i) => {
+        if (v == null || pts[i].y == null) return;
+        const cx = pts[i].x.toFixed(1);
+        const cy = pts[i].y.toFixed(1);
+        const tipLabel = (labels && labels[i]) ? labels[i] : '';
+        const tipVal   = fmtFn ? fmtFn(v) : String(v);
+        const hx = (i * colW).toFixed(1);
+        extras += `<circle cx="${cx}" cy="${cy}" r="2.5" fill="${color}" fill-opacity="0.8" pointer-events="none"/>`;
+        extras += `<rect x="${hx}" y="0" width="${colW.toFixed(1)}" height="${H}" fill="transparent"
+            data-stip-label="${tipLabel}" data-stip-val="${tipVal}" data-stip-color="${color}" class="spark-hit"/>`;
+    });
+
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="display:block;width:100%;height:36px;margin-top:10px;overflow:visible;">
+        <defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${color}" stop-opacity="0.2"/>
+            <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+        </linearGradient></defs>
+        <path d="${fill}" fill="url(#${gradId})"/>
+        <path d="${line}" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        ${extras}
+    </svg>`;
+}
+
+function attachSparklisteners() {
+    document.querySelectorAll('.spark-hit').forEach(rect => {
+        rect.addEventListener('mouseenter', evt => {
+            showSparkTip(evt, rect.dataset.stipLabel, rect.dataset.stipVal, rect.dataset.stipColor);
+        });
+        rect.addEventListener('mouseleave', hideSparkTip);
+    });
+}
+
+function renderKPISparklines(rows) {
+    const today = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        months.push({
+            key:   `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,
+            label: d.toLocaleString('default', { month: 'short' }) + ' ' + d.getFullYear(),
+            opens: [], clicks: [], ctors: [], sent: 0,
+        });
+    }
+    const byMonth = Object.fromEntries(months.map(m => [m.key, m]));
+    for (const r of rows) {
+        if (!r.send_date) continue;
+        const key = r.send_date.substring(0, 7);
+        if (!byMonth[key]) continue;
+        if (r.open_rate != null)          byMonth[key].opens.push(r.open_rate);
+        if (r.click_rate != null)         byMonth[key].clicks.push(r.click_rate);
+        if (r.click_to_open_rate != null) byMonth[key].ctors.push(r.click_to_open_rate);
+        byMonth[key].sent += (r.emails_sent || 0) + (r.emails_sent_b || 0);
+    }
+    const avg  = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+    const mLbl = months.map(m => m.label);
+    const el   = id => document.getElementById(id);
+    const pctFmt  = v => (v * 100).toFixed(1) + '%';
+    const sentFmt = v => Math.round(v).toLocaleString();
+    el('kpi-open-spark') .innerHTML = makeSparklineSVG(months.map(m => avg(m.opens)),  mLbl, '#818cf8', 'sg-open',  pctFmt);
+    el('kpi-click-spark').innerHTML = makeSparklineSVG(months.map(m => avg(m.clicks)), mLbl, '#4ade80', 'sg-click', pctFmt);
+    el('kpi-ctor-spark') .innerHTML = makeSparklineSVG(months.map(m => avg(m.ctors)),  mLbl, '#f59e0b', 'sg-ctor',  pctFmt);
+    el('kpi-sent-spark') .innerHTML = makeSparklineSVG(months.map(m => m.sent || null),mLbl, '#38bdf8', 'sg-sent',  sentFmt);
+    attachSparklisteners();
 }
 
 function renderTopPerformers(q1) {
@@ -4186,5 +4298,6 @@ function srHideTooltip() {
     document.getElementById('sr-tooltip').style.display = 'none';
 }
 </script>
+<div id="spark-tip" style="position:fixed;background:#0f172a;border:1px solid #334155;border-radius:7px;padding:7px 11px;font-size:12px;color:#e2e8f0;pointer-events:none;display:none;z-index:9999;white-space:nowrap;line-height:1.4;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
 </body>
 </html>
