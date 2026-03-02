@@ -2464,20 +2464,46 @@ async function silentSyncFromCoda() {
     });
     const newOnes = allDeduped.filter(r => !existingKeys.has(`${r.name}|${r.goLive}`));
 
-    // Insert new rows
+    // Insert new rows — but first check if same name exists with a different date
+    // and no metrics (date was moved in Coda). Update that record instead of inserting.
     if (newOnes.length) {
-        const insertRows = newOnes.map(r => ({
-            campaign_name:    r.name,
-            category:         r.category,
-            channel:          'Email',
-            send_date:        r.goLive,
-            created_by:       r.owners || null,
-            notes:            [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
-            parent_campaign:  r.parent || null,
-        }));
-        const { error } = await db.from('lifecycle_campaigns').insert(insertRows);
-        if (error) return;
-        showSyncToast(`↓ Synced ${newOnes.length} new campaign${newOnes.length > 1 ? 's' : ''} from Coda`);
+        const { data: allExisting } = await db.from('lifecycle_campaigns')
+            .select('campaign_id, campaign_name, send_date, open_rate');
+        const existingByName = {};
+        for (const e of (allExisting || [])) {
+            if (!existingByName[e.campaign_name]) existingByName[e.campaign_name] = [];
+            existingByName[e.campaign_name].push(e);
+        }
+
+        const toInsert = [], dateUpdates = [];
+        for (const r of newOnes) {
+            const matches = existingByName[r.name] || [];
+            const stale = matches.find(e => e.send_date !== r.goLive && e.open_rate == null);
+            if (stale) {
+                dateUpdates.push(db.from('lifecycle_campaigns').update({
+                    send_date: r.goLive, category: r.category,
+                    created_by: r.owners || null,
+                    notes: [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
+                    parent_campaign: r.parent || null,
+                }).eq('campaign_id', stale.campaign_id));
+            } else {
+                toInsert.push(r);
+            }
+        }
+        if (dateUpdates.length) await Promise.all(dateUpdates);
+        if (toInsert.length) {
+            const insertRows = toInsert.map(r => ({
+                campaign_name: r.name, category: r.category, channel: 'Email',
+                send_date: r.goLive, created_by: r.owners || null,
+                notes: [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
+                parent_campaign: r.parent || null,
+            }));
+            const { error } = await db.from('lifecycle_campaigns').insert(insertRows);
+            if (error) return;
+        }
+        const added = toInsert.length, moved = dateUpdates.length;
+        const msg = [added && `${added} new`, moved && `${moved} date${moved!==1?'s':''} updated`].filter(Boolean).join(', ');
+        if (msg) showSyncToast(`↓ ${msg} from Coda`);
     }
 
     // Update metadata for already-existing records
@@ -2648,27 +2674,58 @@ async function confirmCodaSync() {
     const panel = document.getElementById('coda-sync-panel');
     panel.innerHTML = `<div class="sync-panel"><p style="color:var(--muted);font-size:13px;">Importing and updating parent info...</p></div>`;
 
-    // Insert new rows
+    // For "new" campaigns: check if same name exists in Supabase with a different date
+    // but no metrics yet — if so, update the date rather than inserting a duplicate.
+    let dateUpdated = 0, toInsert = [];
     if (queue.length) {
-        const rows = queue.map(r => ({
-            campaign_name:   r.name,
-            category:        r.category,
-            channel:         'Email',
-            send_date:       r.goLive,
-            created_by:      r.owners || null,
-            notes:           [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
-            parent_campaign: r.parent || null,
-        }));
-        const { error } = await db.from('lifecycle_campaigns').insert(rows);
-        if (error) {
-            panel.innerHTML = `<div class="sync-panel"><div class="alert alert-error">Import failed: ${error.message}</div></div>`;
-            return;
+        const { data: allExisting } = await db.from('lifecycle_campaigns')
+            .select('campaign_id, campaign_name, send_date, open_rate');
+        const existingByName = {};
+        for (const e of (allExisting || [])) {
+            if (!existingByName[e.campaign_name]) existingByName[e.campaign_name] = [];
+            existingByName[e.campaign_name].push(e);
+        }
+
+        for (const r of queue) {
+            const matches = existingByName[r.name] || [];
+            // A metrics-free record with a different date = date was moved in Coda
+            const stale = matches.find(e => e.send_date !== r.goLive && e.open_rate == null);
+            if (stale) {
+                await db.from('lifecycle_campaigns').update({
+                    send_date:       r.goLive,
+                    category:        r.category,
+                    created_by:      r.owners || null,
+                    notes:           [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
+                    parent_campaign: r.parent || null,
+                }).eq('campaign_id', stale.campaign_id);
+                dateUpdated++;
+            } else {
+                toInsert.push(r);
+            }
+        }
+
+        if (toInsert.length) {
+            const rows = toInsert.map(r => ({
+                campaign_name:   r.name,
+                category:        r.category,
+                channel:         'Email',
+                send_date:       r.goLive,
+                created_by:      r.owners || null,
+                notes:           [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
+                parent_campaign: r.parent || null,
+            }));
+            const { error } = await db.from('lifecycle_campaigns').insert(rows);
+            if (error) {
+                panel.innerHTML = `<div class="sync-panel"><div class="alert alert-error">Import failed: ${error.message}</div></div>`;
+                return;
+            }
         }
     }
 
-    const msg = queue.length
-        ? `✓ ${queue.length} new campaign${queue.length > 1 ? 's' : ''} imported.`
-        : `✓ Sync complete.`;
+    const parts = [];
+    if (toInsert.length) parts.push(`${toInsert.length} new campaign${toInsert.length !== 1 ? 's' : ''} added`);
+    if (dateUpdated)     parts.push(`${dateUpdated} date${dateUpdated !== 1 ? 's' : ''} updated`);
+    const msg = parts.length ? `✓ ${parts.join(', ')}.` : `✓ Sync complete.`;
     panel.innerHTML = `<div class="sync-panel"><div class="alert alert-success">${msg} Refreshing...</div></div>`;
     window._codaSyncQueue = [];
     window._codaSyncAll   = [];
