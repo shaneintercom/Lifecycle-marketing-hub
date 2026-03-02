@@ -3919,6 +3919,14 @@ function renderSRSources() {
         const subjDisplay = subj.length > 100 ? subj.slice(0, 100) + '…' : subj;
         const hasSnippet = s.bodySnippet && s.bodySnippet !== s.subject;
         const snippet = hasSnippet ? (s.bodySnippet.length > 120 ? s.bodySnippet.slice(0, 120) + '…' : s.bodySnippet) : '';
+        const loaded = s.loadedTotal != null;
+        const countTop    = loaded ? s.loadedReplies  : s.replyCount;
+        const countLabel  = loaded
+            ? `customer repl${s.loadedReplies !== 1 ? 'ies' : 'y'}`
+            : `conversation${s.replyCount !== 1 ? 's' : ''}`;
+        const countSub = loaded
+            ? `<div style="font-size:10px;color:var(--muted);margin-top:1px;">from ${s.loadedSampled} of ${s.loadedTotal} convos</div>`
+            : '';
         return `<div class="card" style="padding:14px;cursor:pointer;margin-bottom:8px;transition:border-color 0.15s;" onmouseenter="this.style.borderColor='var(--brand)'" onmouseleave="this.style.borderColor='var(--border)'" onclick="loadSRReplies(${i})">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
                 <div style="flex:1;min-width:0;">
@@ -3927,8 +3935,9 @@ function renderSRSources() {
                     <div style="font-size:12px;color:var(--muted);">Sent by: ${escHtml(s.senderName || '—')}${s.senderEmail ? ` &lt;${escHtml(s.senderEmail)}&gt;` : ''}</div>
                 </div>
                 <div style="flex-shrink:0;text-align:right;">
-                    <div style="font-size:18px;font-weight:700;color:var(--brand);">${s.replyCount}</div>
-                    <div style="font-size:11px;color:var(--muted);">conversation${s.replyCount !== 1 ? 's' : ''}</div>
+                    <div style="font-size:18px;font-weight:700;color:var(--brand);">${countTop}</div>
+                    <div style="font-size:11px;color:var(--muted);">${countLabel}</div>
+                    ${countSub}
                 </div>
             </div>
         </div>`;
@@ -3972,6 +3981,11 @@ async function loadSRReplies(idx) {
         ];
         document.getElementById('sr-selected-meta').textContent = metaParts.join(' · ');
 
+        // Cache reply stats on the source so the card shows them when going back
+        _srSources[idx].loadedReplies  = _srReplies.length;
+        _srSources[idx].loadedSampled  = sampled;
+        _srSources[idx].loadedTotal    = data.total;
+
         if (!_srReplies.length) {
             tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted);">No customer replies found for this message.</td></tr>';
             return;
@@ -4000,8 +4014,11 @@ async function loadSRReplies(idx) {
 
 function closeSRPanel() {
     document.getElementById('sr-replies-panel').style.display = 'none';
-    document.getElementById('sr-sources').style.display = _srSources.length ? 'block' : 'none';
     _srReplies = [];
+    if (_srSources.length) {
+        renderSRSources(); // re-render so cards show cached reply counts
+        document.getElementById('sr-sources').style.display = 'block';
+    }
 }
 
 async function analyseSeriesReplies() {
