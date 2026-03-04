@@ -2587,22 +2587,25 @@ async function silentSyncFromCoda() {
             existingByName[e.campaign_name].push(e);
         }
 
-        const toInsert = [], dateUpdates = [];
+        const toInsert = [], dateUpdateOps = [];
         for (const r of newOnes) {
             const matches = existingByName[r.name] || [];
-            const stale = matches.find(e => e.send_date !== r.goLive && e.open_rate == null);
-            if (stale) {
-                dateUpdates.push(db.from('lifecycle_campaigns').update({
+            const staleRecords = matches.filter(e => e.send_date !== r.goLive && e.open_rate == null);
+            if (staleRecords.length > 0) {
+                dateUpdateOps.push(db.from('lifecycle_campaigns').update({
                     send_date: r.goLive, category: r.category,
                     created_by: r.owners || null,
                     notes: [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
                     parent_campaign: r.parent || null,
-                }).eq('campaign_id', stale.campaign_id));
+                }).eq('campaign_id', staleRecords[0].campaign_id));
+                for (const extra of staleRecords.slice(1)) {
+                    dateUpdateOps.push(db.from('lifecycle_campaigns').delete().eq('campaign_id', extra.campaign_id));
+                }
             } else {
                 toInsert.push(r);
             }
         }
-        if (dateUpdates.length) await Promise.all(dateUpdates);
+        if (dateUpdateOps.length) await Promise.all(dateUpdateOps);
         if (toInsert.length) {
             const insertRows = toInsert.map(r => ({
                 campaign_name: r.name, category: r.category, channel: 'Email',
@@ -2752,16 +2755,51 @@ async function syncFromCoda() {
     ));
     if (existingOnes.length) await loadCalendar();
 
+    // Auto-detect and fix date-moved campaigns immediately (don't wait for Import click)
+    let autoDateMoved = 0;
+    const genuinelyNew = [];
+    if (newOnes.length) {
+        const { data: allExisting } = await db.from('lifecycle_campaigns')
+            .select('campaign_id, campaign_name, send_date, open_rate');
+        const existingByName = {};
+        for (const e of (allExisting || [])) {
+            if (!existingByName[e.campaign_name]) existingByName[e.campaign_name] = [];
+            existingByName[e.campaign_name].push(e);
+        }
+        const dateOps = [];
+        for (const r of newOnes) {
+            const matches = existingByName[r.name] || [];
+            const staleRecords = matches.filter(e => e.send_date !== r.goLive && e.open_rate == null);
+            if (staleRecords.length > 0) {
+                dateOps.push(db.from('lifecycle_campaigns').update({
+                    send_date: r.goLive, category: r.category,
+                    created_by: r.owners || null,
+                    notes: [r.priority, r.quarter, r.status].filter(Boolean).join(' · ') || null,
+                    parent_campaign: r.parent || null,
+                }).eq('campaign_id', staleRecords[0].campaign_id));
+                for (const extra of staleRecords.slice(1)) {
+                    dateOps.push(db.from('lifecycle_campaigns').delete().eq('campaign_id', extra.campaign_id));
+                }
+                autoDateMoved++;
+            } else {
+                genuinelyNew.push(r);
+            }
+        }
+        if (dateOps.length) await Promise.all(dateOps);
+        if (autoDateMoved) await loadCalendar();
+    }
+
     panel.innerHTML = `
         <div class="sync-panel">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                 <strong style="font-size:14px;">Coda FY27 Roadmap — ${toImport.length} campaigns with GO LIVE dates</strong>
                 <div style="display:flex;gap:8px;">
-                    ${newOnes.length ? `<button class="btn btn-primary" onclick="confirmCodaSync()">Import ${newOnes.length} new campaign${newOnes.length > 1 ? 's' : ''}</button>` : '<span style="color:var(--success);font-size:13px;">✓ All up to date</span>'}
+                    ${genuinelyNew.length ? `<button class="btn btn-primary" onclick="confirmCodaSync()">Import ${genuinelyNew.length} new campaign${genuinelyNew.length > 1 ? 's' : ''}</button>` : '<span style="color:var(--success);font-size:13px;">✓ All up to date</span>'}
                     <button class="btn-sm" onclick="document.getElementById('coda-sync-panel').style.display='none'">Dismiss</button>
                 </div>
             </div>
-            ${newOnes.map(r => `
+            ${autoDateMoved ? `<p style="margin-bottom:10px;font-size:12px;color:var(--success);">✓ ${autoDateMoved} campaign date${autoDateMoved !== 1 ? 's' : ''} updated automatically.</p>` : ''}
+            ${genuinelyNew.map(r => `
                 <div class="sync-row">
                     <span class="sync-row-name">${r.name}</span>
                     <span class="sync-row-meta">
@@ -2774,8 +2812,8 @@ async function syncFromCoda() {
             ${skipOnes.length ? `<p style="margin-top:10px;font-size:12px;color:var(--muted);">${skipOnes.length} already imported, skipping.</p>` : ''}
         </div>`;
 
-    // Store for confirm step — queue = new rows to insert, all = every row for parent backfill
-    window._codaSyncQueue = newOnes;
+    // Store for confirm step — queue = genuinely new inserts only, all = every row for parent backfill
+    window._codaSyncQueue = genuinelyNew;
     window._codaSyncAll   = toImport;
 }
 
