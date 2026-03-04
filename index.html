@@ -847,28 +847,24 @@
         <div class="dash-section-label">Activation & onboarding — email performance this quarter</div>
         <div class="dash-kpi-strip">
             <div class="dash-kpi">
-                <div class="kpi-label">Emails sent Q1</div>
+                <div class="kpi-label" id="act-kpi-sent-label">Emails sent</div>
                 <div class="kpi-value" id="act-kpi-sent">—</div>
                 <div class="kpi-sub" id="act-kpi-sent-delta"></div>
-                <div id="act-kpi-sent-spark"></div>
             </div>
             <div class="dash-kpi">
-                <div class="kpi-label">Avg open rate Q1</div>
+                <div class="kpi-label" id="act-kpi-open-label">Avg open rate</div>
                 <div class="kpi-value" id="act-kpi-open">—</div>
                 <div class="kpi-sub" id="act-kpi-open-delta"></div>
-                <div id="act-kpi-open-spark"></div>
             </div>
             <div class="dash-kpi">
-                <div class="kpi-label">Avg click rate Q1</div>
+                <div class="kpi-label" id="act-kpi-click-label">Avg click rate</div>
                 <div class="kpi-value" id="act-kpi-click">—</div>
                 <div class="kpi-sub" id="act-kpi-click-delta"></div>
-                <div id="act-kpi-click-spark"></div>
             </div>
             <div class="dash-kpi">
-                <div class="kpi-label">Avg CTOR Q1</div>
+                <div class="kpi-label" id="act-kpi-ctor-label">Avg CTOR</div>
                 <div class="kpi-value" id="act-kpi-ctor">—</div>
                 <div class="kpi-sub" id="act-kpi-ctor-delta"></div>
-                <div id="act-kpi-ctor-spark"></div>
             </div>
         </div>
 
@@ -4607,15 +4603,80 @@ function saveActTableau(section) {
 let _actCodaRows = [];
 let _actMetricsMap = new Map(); // normalizedName → metrics row
 
+function getPrevQuarter(quarter) {
+    const order = ['FY26 Q1', 'FY26 Q2', 'FY26 Q3', 'FY26 Q4', 'FY27 Q1'];
+    const idx = order.indexOf(quarter);
+    return idx > 0 ? order[idx - 1] : null;
+}
+
 async function loadActMetricsForQuarter(quarter) {
     _actMetricsMap = new Map();
-    const { data } = await db.from('lifecycle_activation_metrics')
-        .select('*')
-        .eq('quarter', quarter);
-    for (const row of (data || [])) {
+    const prevQ = getPrevQuarter(quarter);
+    const [curRes, prevRes] = await Promise.all([
+        db.from('lifecycle_activation_metrics').select('*').eq('quarter', quarter),
+        prevQ ? db.from('lifecycle_activation_metrics').select('*').eq('quarter', prevQ) : Promise.resolve({ data: [] }),
+    ]);
+    const currentRows = curRes.data  || [];
+    const prevRows    = prevRes.data || [];
+    for (const row of currentRows) {
         _actMetricsMap.set(normalizeStr(row.campaign_name), row);
     }
     if (_actCodaRows.length) renderActCodaCampaigns(_actCodaRows, _actMetricsMap);
+    renderActKPIsFromMetrics(currentRows, prevRows, quarter, prevQ);
+}
+
+function renderActKPIsFromMetrics(currentRows, prevRows, quarter, prevQuarter) {
+    const avgF = (rows, field) => {
+        const vals = rows.filter(r => r[field] != null).map(r => r[field]);
+        return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+    const sumSent = rows => rows.reduce((s, r) => s + (r.emails_sent || 0), 0);
+
+    const curSent  = sumSent(currentRows);
+    const curOpen  = avgF(currentRows, 'open_rate');
+    const curClick = avgF(currentRows, 'click_rate');
+    const curCTOR  = avgF(currentRows, 'click_to_open_rate');
+    const prevSent  = prevRows.length ? sumSent(prevRows)             : null;
+    const prevOpen  = prevRows.length ? avgF(prevRows, 'open_rate')   : null;
+    const prevClick = prevRows.length ? avgF(prevRows, 'click_rate')  : null;
+    const prevCTOR  = prevRows.length ? avgF(prevRows, 'click_to_open_rate') : null;
+    const hasPrev   = prevRows.length > 0;
+    const shortQ    = quarter    || '';
+    const shortPrev = prevQuarter || '';
+
+    const sentDelta = () => {
+        if (!currentRows.length) return `<span class="kpi-flat">no ${shortQ} data yet</span>`;
+        if (!hasPrev || prevSent == null) return `<span class="kpi-flat">no ${shortPrev} data</span>`;
+        const pct  = (curSent - prevSent) / prevSent * 100;
+        const sign = pct > 0 ? '+' : '';
+        const cls  = pct > 0 ? 'kpi-up' : pct < 0 ? 'kpi-down' : 'kpi-flat';
+        return `<span class="${cls}">${sign}${pct.toFixed(0)}% vs ${shortPrev} (${prevSent.toLocaleString()})</span>`;
+    };
+    const rateDelta = (cur, prev) => {
+        if (cur == null) return '';
+        if (!hasPrev || prev == null) return `<span class="kpi-flat">no ${shortPrev} data</span>`;
+        const d    = (cur - prev) * 100;
+        const sign = d > 0 ? '+' : '';
+        const cls  = d > 0 ? 'kpi-up' : d < 0 ? 'kpi-down' : 'kpi-flat';
+        return `<span class="${cls}">${sign}${d.toFixed(1)}pp vs ${shortPrev}</span>`;
+    };
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val != null ? val : '—'; };
+    const setH = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+
+    set('act-kpi-sent-label',  `Emails sent — ${shortQ}`);
+    set('act-kpi-open-label',  `Avg open rate — ${shortQ}`);
+    set('act-kpi-click-label', `Avg click rate — ${shortQ}`);
+    set('act-kpi-ctor-label',  `Avg CTOR — ${shortQ}`);
+
+    set('act-kpi-sent',  currentRows.length ? curSent.toLocaleString() : '—');
+    setH('act-kpi-sent-delta',  sentDelta());
+    set('act-kpi-open',  curOpen  != null ? (curOpen  * 100).toFixed(1) + '%' : '—');
+    setH('act-kpi-open-delta',  rateDelta(curOpen,  prevOpen));
+    set('act-kpi-click', curClick != null ? (curClick * 100).toFixed(1) + '%' : '—');
+    setH('act-kpi-click-delta', rateDelta(curClick, prevClick));
+    set('act-kpi-ctor',  curCTOR  != null ? (curCTOR  * 100).toFixed(1) + '%' : '—');
+    setH('act-kpi-ctor-delta',  rateDelta(curCTOR,  prevCTOR));
 }
 
 function toggleActUpload() {
@@ -4822,40 +4883,23 @@ async function loadActivation() {
         });
 
     try {
-        const [q1Res, q4Res, trendRes, histRes] = await Promise.all([
+        const [q1Res, histRes] = await Promise.all([
             db.from('lifecycle_campaigns').select('*')
                 .eq('category', 'Early lifecycle')
                 .gte('send_date', ACT_Q1_FROM)
                 .order('send_date', { ascending: false }),
-            db.from('lifecycle_campaigns')
-                .select('emails_sent,emails_sent_b,open_rate,click_rate,click_to_open_rate')
-                .eq('category', 'Early lifecycle')
-                .gte('send_date', ACT_Q4_FROM)
-                .lt('send_date', ACT_Q1_FROM),
-            db.from('lifecycle_campaigns')
-                .select('send_date,open_rate,click_rate,click_to_open_rate,emails_sent,emails_sent_b')
-                .eq('category', 'Early lifecycle')
-                .gte('send_date', '2025-10-01')
-                .not('open_rate', 'is', null),
             db.from('lifecycle_campaigns')
                 .select('send_date,open_rate,click_rate,emails_sent,emails_sent_b')
                 .eq('category', 'Early lifecycle')
                 .gte('send_date', '2025-05-01'),
         ]);
 
-        const q1   = q1Res.data   || [];
-        const q4   = q4Res.data   || [];
-        const trend = trendRes.data || [];
-        const hist  = histRes.data  || [];
+        const q1   = q1Res.data  || [];
+        const hist = histRes.data || [];
 
-        renderActKPIs(q1, q4);
-        renderActSparklines(trend);
         renderActTopPerformers(q1);
         renderActTrendChart(hist);
     } catch(e) {
-        ['act-kpi-sent','act-kpi-open','act-kpi-click','act-kpi-ctor'].forEach(id => {
-            const el = document.getElementById(id); if (el) el.textContent = 'Error';
-        });
         document.getElementById('act-top-body').innerHTML = `<tr><td colspan="5" style="padding:16px;color:#f87171;font-size:13px;">Could not load campaign data: ${e.message}</td></tr>`;
         document.getElementById('act-trend').innerHTML = `<div style="color:#f87171;font-size:13px;">Could not load trend data.</div>`;
     }
