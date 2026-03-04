@@ -302,6 +302,13 @@
         .lc-date-chip { font-size:11px; background:rgba(255,255,255,0.05); border-radius:4px; padding:2px 8px; color:var(--muted); }
         .lc-date-chip span { color:var(--text); font-weight:600; }
 
+        /* ── ACTIVATION TRACKING ── */
+        .act-tableau-tile { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+        .act-tableau-tile .kpi-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin-bottom:8px; }
+        .act-tableau-tile .kpi-value { font-size:26px; font-weight:800; color:var(--text); line-height:1.1; }
+        .act-tableau-tile .kpi-sub { font-size:12px; margin-top:6px; }
+        .act-tableau-tile .kpi-subtext { font-size:11px; color:var(--muted); margin-top:8px; line-height:1.4; }
+        .act-edit-grid { display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px; align-items:end; margin-bottom:10px; }
         /* ── PRODUCT UPDATES ── */
         .pu-type { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; white-space:nowrap; }
         .pu-type-new       { background:#1e3a5f; color:#93c5fd; }
@@ -349,6 +356,7 @@
     <button data-tab="reports">Generate Report</button>
     <button data-tab="productupdates">Product Updates</button>
     <button data-tab="seriesreplies">Series Replies</button>
+    <button data-tab="activation">Activation Tracking</button>
 </nav>
 
 <main>
@@ -830,6 +838,80 @@
 
 </main>
 
+    <!-- ACTIVATION TRACKING -->
+    <div id="tab-activation" class="tab-content">
+        <h2>Activation Tracking</h2>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:24px;">Quarter-on-quarter performance for Activation and Onboarding lifecycle campaigns, plus company-wide activation metrics from Tableau.</p>
+
+        <!-- Section 1: Headline email KPIs -->
+        <div class="dash-section-label">Activation & onboarding — email performance this quarter</div>
+        <div class="dash-kpi-strip">
+            <div class="dash-kpi">
+                <div class="kpi-label">Emails sent Q1</div>
+                <div class="kpi-value" id="act-kpi-sent">—</div>
+                <div class="kpi-sub" id="act-kpi-sent-delta"></div>
+                <div id="act-kpi-sent-spark"></div>
+            </div>
+            <div class="dash-kpi">
+                <div class="kpi-label">Avg open rate Q1</div>
+                <div class="kpi-value" id="act-kpi-open">—</div>
+                <div class="kpi-sub" id="act-kpi-open-delta"></div>
+                <div id="act-kpi-open-spark"></div>
+            </div>
+            <div class="dash-kpi">
+                <div class="kpi-label">Avg click rate Q1</div>
+                <div class="kpi-value" id="act-kpi-click">—</div>
+                <div class="kpi-sub" id="act-kpi-click-delta"></div>
+                <div id="act-kpi-click-spark"></div>
+            </div>
+            <div class="dash-kpi">
+                <div class="kpi-label">Avg CTOR Q1</div>
+                <div class="kpi-value" id="act-kpi-ctor">—</div>
+                <div class="kpi-sub" id="act-kpi-ctor-delta"></div>
+                <div id="act-kpi-ctor-spark"></div>
+            </div>
+        </div>
+
+        <!-- Top performers -->
+        <div style="margin-bottom:24px;">
+            <div class="dash-section-label">Top performers this quarter</div>
+            <div class="card-flush">
+                <table>
+                    <thead><tr>
+                        <th>Campaign</th>
+                        <th>Sent</th>
+                        <th>Open %</th>
+                        <th>Click %</th>
+                        <th>CTOR %</th>
+                    </tr></thead>
+                    <tbody id="act-top-body"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Section 2: Company Activation — Tableau -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div class="dash-section-label" style="margin-bottom:0;">Company activation performance — Tableau</div>
+            <button class="btn-sm" onclick="openActEdit('company')">✎ Edit values</button>
+        </div>
+        <div id="act-company-tiles" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:6px;"></div>
+        <div id="act-company-edit-panel" style="display:none;margin-bottom:6px;"></div>
+        <p style="font-size:11px;color:var(--muted);margin-bottom:24px;">Values sourced from Tableau. Click "Edit values" after checking the Tableau dashboard to keep these up to date.</p>
+
+        <!-- Section 3: CLM Attribution — Tableau -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div class="dash-section-label" style="margin-bottom:0;">CLM attribution & influence — Tableau</div>
+            <button class="btn-sm" onclick="openActEdit('clm')">✎ Edit values</button>
+        </div>
+        <div id="act-clm-tiles" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:6px;"></div>
+        <div id="act-clm-edit-panel" style="display:none;margin-bottom:6px;"></div>
+        <p style="font-size:11px;color:var(--muted);margin-bottom:24px;">Influenced = any CLM touchpoint during the activation window. Attributed = last-touch CLM campaign. Both based on Tableau attribution logic.</p>
+
+        <!-- Section 4: Quarterly trend -->
+        <div class="dash-section-label">Quarterly trend — activation & onboarding email metrics (last 4 quarters)</div>
+        <div id="act-trend" class="card" style="padding:20px 24px;"></div>
+    </div>
+
 <!-- SERIES REPLY TOOLTIP -->
 <div id="sr-tooltip" style="display:none;position:fixed;z-index:200;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 16px;max-width:420px;font-size:13px;line-height:1.65;color:#e2e8f0;box-shadow:0 4px 24px rgba(0,0,0,0.5);pointer-events:none;white-space:pre-wrap;word-break:break-word;"></div>
 
@@ -991,6 +1073,7 @@ document.querySelectorAll('nav button').forEach(btn => {
         if (btn.dataset.tab === 'abtests')   loadABTests();
         if (btn.dataset.tab === 'reports')        loadCampaignsForReport();
         if (btn.dataset.tab === 'productupdates') loadProductUpdates();
+        if (btn.dataset.tab === 'activation')     loadActivation();
     });
 });
 
@@ -4339,6 +4422,332 @@ function srShowTooltip(el, event) {
 function srHideTooltip() {
     clearTimeout(_srTooltipTimer);
     document.getElementById('sr-tooltip').style.display = 'none';
+}
+
+// ── ACTIVATION TRACKING ─────────────────────────────────────────────────────
+
+const ACT_Q1_FROM  = '2026-02-01';
+const ACT_Q4_FROM  = '2025-11-01';
+const ACT_Q4_TO    = '2026-01-31';
+
+const ACT_TABLEAU_DEFS = {
+    company: [
+        { key: 'activation_rate', label: 'Overall activation rate',  subtext: 'Workspaces that activated at least one seat' },
+        { key: 'setup_rate',      label: 'Overall setup rate',       subtext: 'Workspaces completing the initial setup flow' },
+        { key: 'golive_rate',     label: 'Overall go live rate',     subtext: 'Workspaces that went live with at least one channel' },
+    ],
+    clm: [
+        { key: 'influenced', label: '% activations influenced by CLM', subtext: 'Activating workspaces that received a lifecycle email in the activation window' },
+        { key: 'attributed', label: '% activations attributed to CLM', subtext: 'Activations where last-touch was a lifecycle campaign' },
+    ],
+};
+
+function getActTableauData(section) {
+    try { const s = localStorage.getItem(`act_tableau_${section}`); if (s) return JSON.parse(s); } catch(e) {}
+    return {};
+}
+
+function renderActTableauTiles(section) {
+    const defs  = ACT_TABLEAU_DEFS[section];
+    const data  = getActTableauData(section);
+    const elId  = section === 'company' ? 'act-company-tiles' : 'act-clm-tiles';
+    const el    = document.getElementById(elId);
+    if (!el) return;
+    el.innerHTML = defs.map(def => {
+        const val     = data[def.key] || {};
+        const current = val.current || '';
+        const prev    = val.prev    || '';
+        let delta = `<span class="kpi-flat">no last quarter data</span>`;
+        if (current && prev) {
+            const cur = parseFloat(current.replace('%', '').replace(',', '.'));
+            const prv = parseFloat(prev.replace('%', '').replace(',', '.'));
+            if (!isNaN(cur) && !isNaN(prv)) {
+                const diff = cur - prv;
+                const sign = diff > 0 ? '+' : '';
+                const cls  = diff > 0 ? 'kpi-up' : diff < 0 ? 'kpi-down' : 'kpi-flat';
+                delta = `<span class="${cls}">${sign}${diff.toFixed(1)}pp vs last quarter</span>`;
+            }
+        }
+        return `<div class="act-tableau-tile">
+            <div class="kpi-label">${def.label}</div>
+            <div class="kpi-value">${current || '—'}</div>
+            <div class="kpi-sub">${delta}</div>
+            <div class="kpi-subtext">${def.subtext}</div>
+        </div>`;
+    }).join('');
+}
+
+function openActEdit(section) {
+    const panelId = section === 'company' ? 'act-company-edit-panel' : 'act-clm-edit-panel';
+    const panel   = document.getElementById(panelId);
+    if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+    const defs = ACT_TABLEAU_DEFS[section];
+    const data = getActTableauData(section);
+    panel.innerHTML = `<div class="card" style="margin-bottom:4px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px;">Update Tableau values</div>
+        ${defs.map(def => {
+            const val = data[def.key] || {};
+            return `<div class="act-edit-grid">
+                <div style="font-size:12px;color:var(--text);padding-bottom:2px;">${def.label}</div>
+                <div>
+                    <label style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:3px;">This quarter</label>
+                    <input type="text" value="${val.current || ''}" placeholder="e.g. 32%" id="act-edit-${section}-${def.key}-cur"
+                        style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+                </div>
+                <div>
+                    <label style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:3px;">Last quarter</label>
+                    <input type="text" value="${val.prev || ''}" placeholder="e.g. 29%" id="act-edit-${section}-${def.key}-prev"
+                        style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;">
+                </div>
+            </div>`;
+        }).join('')}
+        <div style="display:flex;gap:8px;margin-top:14px;">
+            <button class="btn btn-primary" style="font-size:13px;" onclick="saveActTableau('${section}')">Save</button>
+            <button class="btn-sm" onclick="document.getElementById('${panelId}').style.display='none'">Cancel</button>
+        </div>
+    </div>`;
+    panel.style.display = 'block';
+}
+
+function saveActTableau(section) {
+    const defs = ACT_TABLEAU_DEFS[section];
+    const saved = {};
+    defs.forEach(def => {
+        const cur = document.getElementById(`act-edit-${section}-${def.key}-cur`);
+        const prv = document.getElementById(`act-edit-${section}-${def.key}-prev`);
+        saved[def.key] = { current: cur ? cur.value.trim() : '', prev: prv ? prv.value.trim() : '' };
+    });
+    localStorage.setItem(`act_tableau_${section}`, JSON.stringify(saved));
+    const panelId = section === 'company' ? 'act-company-edit-panel' : 'act-clm-edit-panel';
+    document.getElementById(panelId).style.display = 'none';
+    renderActTableauTiles(section);
+}
+
+async function loadActivation() {
+    // Tableau tiles load instantly from localStorage
+    renderActTableauTiles('company');
+    renderActTableauTiles('clm');
+
+    // Set loading states for data-driven sections
+    document.getElementById('act-top-body').innerHTML = `<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--muted);">Loading…</td></tr>`;
+    document.getElementById('act-trend').innerHTML = `<div style="color:var(--muted);font-size:13px;">Loading…</div>`;
+
+    try {
+        const [q1Res, q4Res, trendRes, histRes] = await Promise.all([
+            db.from('lifecycle_campaigns').select('*')
+                .eq('category', 'Early lifecycle')
+                .gte('send_date', ACT_Q1_FROM)
+                .order('send_date', { ascending: false }),
+            db.from('lifecycle_campaigns')
+                .select('emails_sent,emails_sent_b,open_rate,click_rate,click_to_open_rate')
+                .eq('category', 'Early lifecycle')
+                .gte('send_date', ACT_Q4_FROM)
+                .lt('send_date', ACT_Q1_FROM),
+            db.from('lifecycle_campaigns')
+                .select('send_date,open_rate,click_rate,click_to_open_rate,emails_sent,emails_sent_b')
+                .eq('category', 'Early lifecycle')
+                .gte('send_date', '2025-10-01')
+                .not('open_rate', 'is', null),
+            db.from('lifecycle_campaigns')
+                .select('send_date,open_rate,click_rate,emails_sent,emails_sent_b')
+                .eq('category', 'Early lifecycle')
+                .gte('send_date', '2025-05-01'),
+        ]);
+
+        const q1   = q1Res.data   || [];
+        const q4   = q4Res.data   || [];
+        const trend = trendRes.data || [];
+        const hist  = histRes.data  || [];
+
+        renderActKPIs(q1, q4);
+        renderActSparklines(trend);
+        renderActTopPerformers(q1);
+        renderActTrendChart(hist);
+    } catch(e) {
+        ['act-kpi-sent','act-kpi-open','act-kpi-click','act-kpi-ctor'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.textContent = 'Error';
+        });
+        document.getElementById('act-top-body').innerHTML = `<tr><td colspan="5" style="padding:16px;color:#f87171;font-size:13px;">Could not load campaign data: ${e.message}</td></tr>`;
+        document.getElementById('act-trend').innerHTML = `<div style="color:#f87171;font-size:13px;">Could not load trend data.</div>`;
+    }
+}
+
+function renderActKPIs(q1, q4) {
+    const avgF = (rows, field) => {
+        const vals = rows.filter(r => r[field] != null).map(r => r[field]);
+        return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+    const sentTotal = rows => rows.reduce((s, r) => s + (r.emails_sent || 0) + (r.emails_sent_b || 0), 0);
+
+    const q1Sent  = sentTotal(q1);
+    const q4Sent  = sentTotal(q4);
+    const q1Open  = avgF(q1, 'open_rate');
+    const q1Click = avgF(q1, 'click_rate');
+    const q1CTOR  = avgF(q1, 'click_to_open_rate');
+    const q4Open  = avgF(q4, 'open_rate');
+    const q4Click = avgF(q4, 'click_rate');
+    const q4CTOR  = avgF(q4, 'click_to_open_rate');
+    const hasQ4   = q4.length > 0;
+
+    const rateDelta = (q1val, q4val) => {
+        if (q1val == null) return '';
+        if (!hasQ4 || q4val == null) return `<span class="kpi-flat">no Q4 data yet</span>`;
+        const d = (q1val - q4val) * 100;
+        const sign = d > 0 ? '+' : '';
+        const cls  = d > 0 ? 'kpi-up' : d < 0 ? 'kpi-down' : 'kpi-flat';
+        return `<span class="${cls}">${sign}${d.toFixed(1)}pp vs Q4</span>`;
+    };
+    const sentDelta = (q1val, q4val) => {
+        if (!hasQ4 || !q4val) return `<span class="kpi-flat">no Q4 data yet</span>`;
+        const pct  = ((q1val - q4val) / q4val) * 100;
+        const sign = pct > 0 ? '+' : '';
+        const cls  = pct > 0 ? 'kpi-up' : pct < 0 ? 'kpi-down' : 'kpi-flat';
+        return `<span class="${cls}">${sign}${pct.toFixed(0)}% vs Q4 (${q4val.toLocaleString()})</span>`;
+    };
+    const fmt = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
+
+    document.getElementById('act-kpi-sent').textContent       = q1Sent > 0 ? q1Sent.toLocaleString() : '—';
+    document.getElementById('act-kpi-open').textContent       = fmt(q1Open);
+    document.getElementById('act-kpi-click').textContent      = fmt(q1Click);
+    document.getElementById('act-kpi-ctor').textContent       = fmt(q1CTOR);
+    document.getElementById('act-kpi-sent-delta').innerHTML   = sentDelta(q1Sent, q4Sent);
+    document.getElementById('act-kpi-open-delta').innerHTML   = rateDelta(q1Open,  q4Open);
+    document.getElementById('act-kpi-click-delta').innerHTML  = rateDelta(q1Click, q4Click);
+    document.getElementById('act-kpi-ctor-delta').innerHTML   = rateDelta(q1CTOR,  q4CTOR);
+}
+
+function renderActSparklines(rows) {
+    const today  = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        months.push({
+            key:   `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,
+            label: d.toLocaleString('default', { month: 'short' }) + ' ' + d.getFullYear(),
+            opens: [], clicks: [], ctors: [], sent: 0,
+        });
+    }
+    const byMonth = Object.fromEntries(months.map(m => [m.key, m]));
+    for (const r of rows) {
+        if (!r.send_date) continue;
+        const key = r.send_date.substring(0, 7);
+        if (!byMonth[key]) continue;
+        if (r.open_rate != null)          byMonth[key].opens.push(r.open_rate);
+        if (r.click_rate != null)         byMonth[key].clicks.push(r.click_rate);
+        if (r.click_to_open_rate != null) byMonth[key].ctors.push(r.click_to_open_rate);
+        byMonth[key].sent += (r.emails_sent || 0) + (r.emails_sent_b || 0);
+    }
+    const avg     = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+    const mLbl    = months.map(m => m.label);
+    const el      = id => document.getElementById(id);
+    const pctFmt  = v => (v * 100).toFixed(1) + '%';
+    const sentFmt = v => Math.round(v).toLocaleString();
+    el('act-kpi-open-spark') .innerHTML = makeSparklineSVG(months.map(m => avg(m.opens)),  mLbl, '#818cf8', 'asg-open',  pctFmt);
+    el('act-kpi-click-spark').innerHTML = makeSparklineSVG(months.map(m => avg(m.clicks)), mLbl, '#4ade80', 'asg-click', pctFmt);
+    el('act-kpi-ctor-spark') .innerHTML = makeSparklineSVG(months.map(m => avg(m.ctors)),  mLbl, '#f59e0b', 'asg-ctor',  pctFmt);
+    el('act-kpi-sent-spark') .innerHTML = makeSparklineSVG(months.map(m => m.sent || null),mLbl, '#38bdf8', 'asg-sent',  sentFmt);
+    attachSparklisteners();
+}
+
+function renderActTopPerformers(q1) {
+    const withData = q1.filter(c => c.open_rate != null && !c.parent_campaign)
+        .sort((a, b) => b.open_rate - a.open_rate)
+        .slice(0, 5);
+    if (!withData.length) {
+        document.getElementById('act-top-body').innerHTML = `<tr><td colspan="5" class="empty">No activation campaigns with performance data yet this quarter.</td></tr>`;
+        return;
+    }
+    document.getElementById('act-top-body').innerHTML = withData.map(c => `
+        <tr class="clickable" onclick="openCampaignById('${c.campaign_id}')">
+            <td><strong>${c.campaign_name}</strong></td>
+            <td style="color:var(--muted);font-size:12px;">${c.emails_sent ? c.emails_sent.toLocaleString() : '—'}</td>
+            <td>${pct(c.open_rate)}</td>
+            <td>${pct(c.click_rate)}</td>
+            <td>${pct(c.click_to_open_rate)}</td>
+        </tr>`).join('');
+}
+
+function renderActTrendChart(hist) {
+    const el = document.getElementById('act-trend');
+    const quarters = [
+        { label: 'FY26 Q2', from: '2025-05-01', to: '2025-07-31' },
+        { label: 'FY26 Q3', from: '2025-08-01', to: '2025-10-31' },
+        { label: 'FY26 Q4', from: '2025-11-01', to: '2026-01-31' },
+        { label: 'FY27 Q1', from: '2026-02-01', to: '2026-12-31' },
+    ];
+
+    const data = quarters.map(q => {
+        const rows    = hist.filter(r => r.send_date >= q.from && r.send_date <= q.to);
+        const opens   = rows.filter(r => r.open_rate != null).map(r => r.open_rate);
+        const clicks  = rows.filter(r => r.click_rate != null).map(r => r.click_rate);
+        const sent    = rows.reduce((s, r) => s + (r.emails_sent || 0) + (r.emails_sent_b || 0), 0);
+        const avgOpen  = opens.length  ? opens.reduce((a, b) => a + b, 0) / opens.length   : null;
+        const avgClick = clicks.length ? clicks.reduce((a, b) => a + b, 0) / clicks.length : null;
+        return { label: q.label, avgOpen, avgClick, sent, count: rows.length };
+    });
+
+    const hasData = data.some(d => d.avgOpen != null || d.avgClick != null);
+    if (!hasData) {
+        el.innerHTML = `<div style="color:var(--muted);font-size:13px;">No quarterly trend data available yet. Data will appear once campaigns have been run for at least one full quarter.</div>`;
+        return;
+    }
+
+    const W = 560, H = 180, mL = 38, mR = 10, mT = 16, mB = 44;
+    const cW = W - mL - mR, cH = H - mT - mB;
+
+    const allVals  = data.flatMap(d => [d.avgOpen, d.avgClick]).filter(v => v != null);
+    const maxVal   = Math.max(...allVals) * 1.25;
+    const groupW   = cW / 4;
+    const barW     = groupW * 0.28;
+    const barGap   = groupW * 0.04;
+
+    const yScale = v => mT + cH - (v / maxVal) * cH;
+
+    let bars = '', xLabels = '', yLabels = '';
+
+    // Y gridlines at 10pp intervals
+    const step = maxVal <= 0.3 ? 0.05 : maxVal <= 0.6 ? 0.1 : 0.2;
+    for (let t = 0; t <= maxVal; t += step) {
+        if (t > maxVal * 1.05) break;
+        const y = yScale(t);
+        yLabels += `<line x1="${mL}" y1="${y.toFixed(1)}" x2="${mL+cW}" y2="${y.toFixed(1)}" stroke="#1e293b" stroke-width="1"/>`;
+        yLabels += `<text x="${mL-5}" y="${(y+3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="#64748b">${(t*100).toFixed(0)}%</text>`;
+    }
+
+    data.forEach((d, i) => {
+        const gx = mL + i * groupW + groupW * 0.12;
+        const cx = mL + i * groupW + groupW / 2;
+
+        if (d.avgOpen != null) {
+            const bh = (d.avgOpen / maxVal) * cH;
+            const by = yScale(d.avgOpen);
+            bars += `<rect x="${gx.toFixed(1)}" y="${by.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" fill="#818cf8" rx="2"/>`;
+            bars += `<text x="${(gx + barW/2).toFixed(1)}" y="${(by - 3).toFixed(1)}" text-anchor="middle" font-size="9" fill="#818cf8">${(d.avgOpen*100).toFixed(1)}%</text>`;
+        }
+        if (d.avgClick != null) {
+            const bh = (d.avgClick / maxVal) * cH;
+            const by = yScale(d.avgClick);
+            const bx = gx + barW + barGap;
+            bars += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" fill="#4ade80" rx="2"/>`;
+            bars += `<text x="${(bx + barW/2).toFixed(1)}" y="${(by - 3).toFixed(1)}" text-anchor="middle" font-size="9" fill="#4ade80">${(d.avgClick*100).toFixed(1)}%</text>`;
+        }
+
+        xLabels += `<text x="${cx.toFixed(1)}" y="${(mT+cH+14).toFixed(1)}" text-anchor="middle" font-size="10" fill="#94a3b8">${d.label}</text>`;
+        xLabels += `<text x="${cx.toFixed(1)}" y="${(mT+cH+26).toFixed(1)}" text-anchor="middle" font-size="9" fill="#475569">${d.count ? d.count + ' email' + (d.count !== 1 ? 's' : '') : 'no data'}</text>`;
+    });
+
+    el.innerHTML = `
+        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;overflow:visible;">
+            ${yLabels}
+            ${bars}
+            ${xLabels}
+            <line x1="${mL}" y1="${mT}" x2="${mL}" y2="${mT+cH}" stroke="#334155" stroke-width="1"/>
+            <line x1="${mL}" y1="${mT+cH}" x2="${mL+cW}" y2="${mT+cH}" stroke="#334155" stroke-width="1"/>
+        </svg>
+        <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--muted);">
+            <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;background:#818cf8;border-radius:2px;flex-shrink:0;"></span>Avg open rate</span>
+            <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;background:#4ade80;border-radius:2px;flex-shrink:0;"></span>Avg click rate</span>
+        </div>`;
 }
 </script>
 <div id="spark-tip" style="position:fixed;background:#0f172a;border:1px solid #334155;border-radius:7px;padding:7px 11px;font-size:12px;color:#e2e8f0;pointer-events:none;display:none;z-index:9999;white-space:nowrap;line-height:1.4;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
