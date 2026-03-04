@@ -889,6 +889,13 @@
             </div>
         </div>
 
+        <!-- Live activation campaigns from Coda -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div class="dash-section-label" style="margin-bottom:0;">Live activation campaigns — Coda</div>
+            <span id="act-live-count" style="font-size:11px;color:var(--muted);"></span>
+        </div>
+        <div id="act-live-campaigns" style="margin-bottom:24px;"><div style="color:var(--muted);font-size:13px;">Loading…</div></div>
+
         <!-- Section 2: Company Activation — Tableau -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <div class="dash-section-label" style="margin-bottom:0;">Company activation performance — Tableau</div>
@@ -4426,6 +4433,55 @@ function srHideTooltip() {
 
 // ── ACTIVATION TRACKING ─────────────────────────────────────────────────────
 
+const ACT_CODA_TABLE_EXISTING = 'grid-LcTEgPSnmQ'; // "Existing campaigns" table
+
+async function fetchActCodaCampaigns() {
+    const url = `https://coda.io/apis/v1/docs/${CODA_DOC}/tables/${ACT_CODA_TABLE_EXISTING}/rows?limit=200&valueFormat=simpleWithArrays`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${CODA_TOKEN}` } });
+    if (!res.ok) throw new Error(`Coda ${res.status}`);
+    const data = await res.json();
+    return (data.items || []).filter(r => r.values['c-rIruy7r0_A'] === 'Live');
+}
+
+function renderActCodaCampaigns(rows) {
+    const el      = document.getElementById('act-live-campaigns');
+    const countEl = document.getElementById('act-live-count');
+    if (!rows.length) {
+        el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:4px 0;">No live activation campaigns found in Coda.</div>`;
+        if (countEl) countEl.textContent = '';
+        return;
+    }
+    if (countEl) countEl.textContent = `${rows.length} live`;
+    el.innerHTML = `<div class="card-flush"><table>
+        <thead><tr>
+            <th>Campaign</th>
+            <th>Segment</th>
+            <th>Launched</th>
+            <th>Description</th>
+        </tr></thead>
+        <tbody>${rows.map(r => {
+            const v    = r.values;
+            const name = (v['c-rsWW5Cy3Ha'] || '').replace(/\n/g, ' ').trim() || '—';
+            const seg  = v['c-3ShvwN1k5l'] || '—';
+            const qtr  = v['c-bZEHkROAZ0'] || '—';
+            const desc = (v['c-M850Nc7MLu'] || '').trim();
+            const link = v['c-qD8VSI8KGE'] || v['c-42neuuWsLZ'] || '';
+            const nameCell = link
+                ? `<a href="${link}" target="_blank" style="color:var(--brand);text-decoration:none;font-weight:600;">${name}</a>`
+                : `<strong>${name}</strong>`;
+            const descCell = desc
+                ? `<span style="color:var(--muted);" title="${desc.replace(/"/g,'&quot;')}">${desc.length > 100 ? desc.slice(0, 100) + '…' : desc}</span>`
+                : `<span style="color:var(--muted);">—</span>`;
+            return `<tr>
+                <td>${nameCell}</td>
+                <td style="font-size:12px;color:var(--muted);">${seg}</td>
+                <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${qtr}</td>
+                <td style="font-size:12px;">${descCell}</td>
+            </tr>`;
+        }).join('')}</tbody>
+    </table></div>`;
+}
+
 const ACT_Q1_FROM  = '2026-02-01';
 const ACT_Q4_FROM  = '2025-11-01';
 const ACT_Q4_TO    = '2026-01-31';
@@ -4531,6 +4587,14 @@ async function loadActivation() {
     // Set loading states for data-driven sections
     document.getElementById('act-top-body').innerHTML = `<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--muted);">Loading…</td></tr>`;
     document.getElementById('act-trend').innerHTML = `<div style="color:var(--muted);font-size:13px;">Loading…</div>`;
+    document.getElementById('act-live-campaigns').innerHTML = `<div style="color:var(--muted);font-size:13px;">Loading…</div>`;
+
+    // Fetch live campaigns from Coda independently so a failure doesn't block the rest
+    fetchActCodaCampaigns()
+        .then(rows => renderActCodaCampaigns(rows))
+        .catch(() => {
+            document.getElementById('act-live-campaigns').innerHTML = `<div style="color:var(--muted);font-size:13px;">Could not load live campaigns from Coda.</div>`;
+        });
 
     try {
         const [q1Res, q4Res, trendRes, histRes] = await Promise.all([
