@@ -892,8 +892,18 @@
         <!-- Live activation campaigns from Coda -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <div class="dash-section-label" style="margin-bottom:0;">Live activation campaigns — Coda</div>
-            <span id="act-live-count" style="font-size:11px;color:var(--muted);"></span>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span id="act-live-count" style="font-size:11px;color:var(--muted);"></span>
+                <select id="act-metrics-quarter" onchange="loadActMetricsForQuarter(this.value)" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg);color:var(--text);font-family:inherit;">
+                    <option value="FY27 Q1">FY27 Q1</option>
+                    <option value="FY26 Q4">FY26 Q4</option>
+                    <option value="FY26 Q3">FY26 Q3</option>
+                    <option value="FY26 Q2">FY26 Q2</option>
+                </select>
+                <button class="btn-sm" id="act-upload-btn" onclick="toggleActUpload()">↑ Upload metrics</button>
+            </div>
         </div>
+        <div id="act-upload-panel" style="display:none;margin-bottom:12px;"></div>
         <div id="act-live-campaigns" style="margin-bottom:24px;"><div style="color:var(--muted);font-size:13px;">Loading…</div></div>
 
         <!-- Section 2: Company Activation — Tableau -->
@@ -4443,9 +4453,10 @@ async function fetchActCodaCampaigns() {
     return (data.items || []).filter(r => r.values['c-rIruy7r0_A'] === 'Live');
 }
 
-function renderActCodaCampaigns(rows) {
+function renderActCodaCampaigns(rows, metricsMap) {
     const el      = document.getElementById('act-live-campaigns');
     const countEl = document.getElementById('act-live-count');
+    const hasMetrics = metricsMap && metricsMap.size > 0;
     if (!rows.length) {
         el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:4px 0;">No live activation campaigns found in Coda.</div>`;
         if (countEl) countEl.textContent = '';
@@ -4458,6 +4469,7 @@ function renderActCodaCampaigns(rows) {
             <th>Segment</th>
             <th>Launched</th>
             <th>Description</th>
+            ${hasMetrics ? '<th style="text-align:right;">Sent</th><th style="text-align:right;">Open %</th><th style="text-align:right;">Click %</th><th style="text-align:right;">CTOR %</th>' : ''}
         </tr></thead>
         <tbody>${rows.map(r => {
             const v    = r.values;
@@ -4472,11 +4484,23 @@ function renderActCodaCampaigns(rows) {
             const descCell = desc
                 ? `<span style="color:var(--muted);" title="${desc.replace(/"/g,'&quot;')}">${desc.length > 100 ? desc.slice(0, 100) + '…' : desc}</span>`
                 : `<span style="color:var(--muted);">—</span>`;
+            let metricsCells = '';
+            if (hasMetrics) {
+                const m = metricsMap.get(normalizeStr(name));
+                const pct = v => v != null ? (v * 100).toFixed(1) + '%' : '—';
+                metricsCells = m
+                    ? `<td style="font-size:12px;text-align:right;">${(m.emails_sent || 0).toLocaleString()}</td>
+                       <td style="font-size:12px;text-align:right;color:var(--brand);">${pct(m.open_rate)}</td>
+                       <td style="font-size:12px;text-align:right;color:var(--brand);">${pct(m.click_rate)}</td>
+                       <td style="font-size:12px;text-align:right;color:var(--brand);">${pct(m.click_to_open_rate)}</td>`
+                    : `<td colspan="4" style="font-size:12px;text-align:right;color:var(--muted);">—</td>`;
+            }
             return `<tr>
                 <td>${nameCell}</td>
                 <td style="font-size:12px;color:var(--muted);">${seg}</td>
                 <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${qtr}</td>
                 <td style="font-size:12px;">${descCell}</td>
+                ${metricsCells}
             </tr>`;
         }).join('')}</tbody>
     </table></div>`;
@@ -4579,6 +4603,202 @@ function saveActTableau(section) {
     renderActTableauTiles(section);
 }
 
+// ── ACTIVATION METRICS UPLOAD ──────────────────────────────────────────────
+let _actCodaRows = [];
+let _actMetricsMap = new Map(); // normalizedName → metrics row
+
+async function loadActMetricsForQuarter(quarter) {
+    _actMetricsMap = new Map();
+    const { data } = await db.from('lifecycle_activation_metrics')
+        .select('*')
+        .eq('quarter', quarter);
+    for (const row of (data || [])) {
+        _actMetricsMap.set(normalizeStr(row.campaign_name), row);
+    }
+    if (_actCodaRows.length) renderActCodaCampaigns(_actCodaRows, _actMetricsMap);
+}
+
+function toggleActUpload() {
+    const panel = document.getElementById('act-upload-panel');
+    const btn   = document.getElementById('act-upload-btn');
+    const open  = panel.style.display === 'none';
+    if (open) {
+        const quarter = document.getElementById('act-metrics-quarter')?.value || 'FY27 Q1';
+        panel.innerHTML = `
+            <div class="card" style="padding:16px 20px;">
+                <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Upload campaign metrics — ${quarter}</div>
+                <div id="act-drop-zone" class="drop-zone" onclick="document.getElementById('act-file-input').click()">
+                    <div class="drop-zone-icon">&#8613;</div>
+                    <div class="drop-zone-text">Drop Intercom CSV here or <u>click to upload</u></div>
+                    <input type="file" id="act-file-input" accept=".csv" onchange="handleActCSVFile(this.files[0])" style="display:none;">
+                </div>
+                <div id="act-upload-filename" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
+                <div id="act-match-table" style="margin-top:12px;"></div>
+            </div>`;
+        panel.style.display = 'block';
+        if (btn) btn.textContent = '↓ Hide upload';
+        initActDropZone();
+    } else {
+        panel.style.display = 'none';
+        if (btn) btn.textContent = '↑ Upload metrics';
+    }
+}
+
+function initActDropZone() {
+    const zone = document.getElementById('act-drop-zone');
+    if (!zone || zone._init) return;
+    zone._init = true;
+    zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', e => { if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over'); });
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file) handleActCSVFile(file);
+    });
+}
+
+function handleActCSVFile(file) {
+    if (!file) return;
+    const el = document.getElementById('act-upload-filename');
+    if (el) el.textContent = '📄 ' + file.name;
+    const reader = new FileReader();
+    reader.onload = e => processActCSV(e.target.result);
+    reader.readAsText(file);
+}
+
+function extractAllActCSVRows(csvText) {
+    const lines = csvText.trim().split('\n').filter(l => l.trim());
+    if (lines.length < 2) return [];
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+    const col = (...names) => { for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i >= 0) return i; } return -1; };
+    const nameIdx  = col('name', 'title', 'campaign', 'message', 'subject');
+    const sentIdx  = col('receipt_total', 'receipts', 'total sent', 'sent', 'delivered', 'recipient', 'delivery');
+    const openIdx  = col('open_total', 'total open', 'unique open', 'opens', 'opened');
+    const clickIdx = col('click_total', 'total click', 'unique click', 'link click', 'clicks', 'clicked');
+    const unsubIdx = col('unsubscribe_total', 'unsubscribes', 'unsubscribed', 'unsub');
+    if (nameIdx < 0 || sentIdx < 0) return [];
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+        const cells = parseCSVLine(lines[i]);
+        const name  = (cells[nameIdx] || '').trim();
+        if (!name) continue;
+        const n = idx => { if (idx < 0 || !cells[idx]) return null; const v = parseInt((cells[idx] || '').replace(/[^0-9]/g, '')); return isNaN(v) ? null : v; };
+        const sent = n(sentIdx);
+        if (sent == null) continue;
+        rows.push({ name, sent, opens: n(openIdx), clicks: n(clickIdx), unsubs: n(unsubIdx) });
+    }
+    return rows;
+}
+
+function processActCSV(csvText) {
+    const matchEl = document.getElementById('act-match-table');
+    if (!matchEl) return;
+    const csvRows = extractAllActCSVRows(csvText);
+    if (!csvRows.length) {
+        matchEl.innerHTML = `<p style="color:#fca5a5;font-size:12px;">No rows with a sent count found. Check the CSV format.</p>`;
+        return;
+    }
+    if (!_actCodaRows.length) {
+        matchEl.innerHTML = `<p style="color:#fca5a5;font-size:12px;">Live campaigns not loaded yet — please wait a moment and try again.</p>`;
+        return;
+    }
+    const codaNames = _actCodaRows.map(r => {
+        const raw = (r.values['c-rsWW5Cy3Ha'] || '').replace(/\n/g, ' ').trim();
+        return { raw, norm: normalizeStr(raw) };
+    });
+    const matches = csvRows.map(row => {
+        const rNorm = normalizeStr(row.name);
+        let best = null, bestScore = 0;
+        for (const c of codaNames) {
+            if (!c.norm) continue;
+            if (c.norm === rNorm || c.raw.toLowerCase() === row.name.toLowerCase()) { best = c.raw; bestScore = 3; break; }
+            if (bestScore < 2 && (c.norm.includes(rNorm) || rNorm.includes(c.norm))) { best = c.raw; bestScore = 2; }
+        }
+        return { csvName: row.name, matchedName: best, sent: row.sent, opens: row.opens, clicks: row.clicks, unsubs: row.unsubs };
+    });
+    window._actCSVMatches = matches;
+    renderActMatchTable(matches);
+}
+
+function renderActMatchTable(matches) {
+    const matchEl = document.getElementById('act-match-table');
+    if (!matchEl) return;
+    const quarter = document.getElementById('act-metrics-quarter')?.value || 'FY27 Q1';
+    const pct = (num, denom) => (num != null && denom) ? (num / denom * 100).toFixed(1) + '%' : '—';
+    const codaOpts = _actCodaRows.map(r => (r.values['c-rsWW5Cy3Ha'] || '').replace(/\n/g, ' ').trim()).filter(Boolean);
+    matchEl.innerHTML = `
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text);">Review matches — ${quarter}</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">${matches.length} rows found. Rows set to "— skip —" will not be saved.</div>
+        <div class="card-flush" style="margin-bottom:12px;"><table>
+            <thead><tr>
+                <th style="font-size:11px;">CSV campaign name</th>
+                <th style="font-size:11px;">Map to live campaign</th>
+                <th style="font-size:11px;text-align:right;">Sent</th>
+                <th style="font-size:11px;text-align:right;">Open %</th>
+                <th style="font-size:11px;text-align:right;">Click %</th>
+                <th style="font-size:11px;text-align:right;">CTOR %</th>
+            </tr></thead>
+            <tbody>${matches.map((m, i) => {
+                const openRate  = m.opens  != null && m.sent ? m.opens  / m.sent : null;
+                const clickRate = m.clicks != null && m.sent ? m.clicks / m.sent : null;
+                const ctor      = openRate && clickRate      ? clickRate / openRate : null;
+                const optionsHtml = `<option value="">— skip —</option>` +
+                    codaOpts.map(n => `<option value="${n}"${n === m.matchedName ? ' selected' : ''}>${n}</option>`).join('');
+                return `<tr>
+                    <td style="font-size:11px;color:var(--muted);">${m.csvName}</td>
+                    <td style="font-size:11px;">
+                        <select class="act-match-sel" data-idx="${i}" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:var(--bg);color:var(--text);">${optionsHtml}</select>
+                    </td>
+                    <td style="font-size:12px;text-align:right;">${(m.sent || 0).toLocaleString()}</td>
+                    <td style="font-size:12px;text-align:right;">${pct(m.opens, m.sent)}</td>
+                    <td style="font-size:12px;text-align:right;">${pct(m.clicks, m.sent)}</td>
+                    <td style="font-size:12px;text-align:right;">${openRate && clickRate ? (clickRate / openRate * 100).toFixed(1) + '%' : '—'}</td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table></div>
+        <button class="btn btn-primary" style="font-size:13px;" onclick="saveActMetrics()">Save metrics</button>
+        <span id="act-save-status" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>`;
+}
+
+async function saveActMetrics() {
+    const quarter  = document.getElementById('act-metrics-quarter')?.value || 'FY27 Q1';
+    const statusEl = document.getElementById('act-save-status');
+    const matches  = window._actCSVMatches || [];
+    if (statusEl) { statusEl.style.color = 'var(--muted)'; statusEl.textContent = 'Saving…'; }
+    const sels   = document.querySelectorAll('.act-match-sel');
+    const toSave = [];
+    sels.forEach((sel, i) => {
+        const campaignName = sel.value;
+        if (!campaignName) return;
+        const m = matches[i];
+        if (!m || m.sent == null) return;
+        const openRate  = m.opens  != null && m.sent ? m.opens  / m.sent : null;
+        const clickRate = m.clicks != null && m.sent ? m.clicks / m.sent : null;
+        const ctor      = openRate && clickRate      ? clickRate / openRate : null;
+        const unsubRate = m.unsubs != null && m.sent ? m.unsubs / m.sent : null;
+        toSave.push({ campaign_name: campaignName, quarter, emails_sent: m.sent, open_rate: openRate, click_rate: clickRate, click_to_open_rate: ctor, unsubscribe_rate: unsubRate });
+    });
+    if (!toSave.length) {
+        if (statusEl) statusEl.textContent = 'Nothing to save — no campaigns matched.';
+        return;
+    }
+    const { error } = await db.from('lifecycle_activation_metrics')
+        .upsert(toSave, { onConflict: 'campaign_name,quarter' });
+    if (error) {
+        if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = 'Error: ' + error.message; }
+        return;
+    }
+    if (statusEl) { statusEl.style.color = 'var(--success)'; statusEl.textContent = `✓ ${toSave.length} campaign${toSave.length !== 1 ? 's' : ''} saved for ${quarter}`; }
+    await loadActMetricsForQuarter(quarter);
+    setTimeout(() => {
+        const panel = document.getElementById('act-upload-panel');
+        const btn   = document.getElementById('act-upload-btn');
+        if (panel) panel.style.display = 'none';
+        if (btn) btn.textContent = '↑ Upload metrics';
+    }, 1500);
+}
+
 async function loadActivation() {
     // Tableau tiles load instantly from localStorage
     renderActTableauTiles('company');
@@ -4589,11 +4809,16 @@ async function loadActivation() {
     document.getElementById('act-trend').innerHTML = `<div style="color:var(--muted);font-size:13px;">Loading…</div>`;
     document.getElementById('act-live-campaigns').innerHTML = `<div style="color:var(--muted);font-size:13px;">Loading…</div>`;
 
-    // Fetch live campaigns from Coda independently so a failure doesn't block the rest
+    // Fetch live campaigns from Coda, then load metrics for the selected quarter
     fetchActCodaCampaigns()
-        .then(rows => renderActCodaCampaigns(rows))
+        .then(rows => {
+            _actCodaRows = rows;
+            const quarter = document.getElementById('act-metrics-quarter')?.value || 'FY27 Q1';
+            return loadActMetricsForQuarter(quarter);
+        })
         .catch(() => {
-            document.getElementById('act-live-campaigns').innerHTML = `<div style="color:var(--muted);font-size:13px;">Could not load live campaigns from Coda.</div>`;
+            if (_actCodaRows.length) renderActCodaCampaigns(_actCodaRows, _actMetricsMap);
+            else document.getElementById('act-live-campaigns').innerHTML = `<div style="color:var(--muted);font-size:13px;">Could not load live campaigns from Coda.</div>`;
         });
 
     try {
