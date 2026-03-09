@@ -2761,7 +2761,7 @@ function mapCategory(lifecycle) {
 }
 
 async function fetchAllCodaRows() {
-    // Fetch FY27 roadmap (all rows)
+    // Fetch FY27 roadmap only — FY26 no longer used (campaigns migrated to FY27)
     let rows = [], pageToken = null;
     do {
         const url = `https://coda.io/apis/v1/docs/${CODA_DOC}/tables/${CODA_TABLE}/rows?limit=500&valueFormat=simpleWithArrays${pageToken ? '&pageToken=' + pageToken : ''}`;
@@ -2770,23 +2770,7 @@ async function fetchAllCodaRows() {
         rows = rows.concat(data.items || []);
         pageToken = data.nextPageToken || null;
     } while (pageToken);
-
-    // Also fetch FY26 roadmap, filtered to Q4 onwards (Nov 1 2025+) to capture historical Q4 data
-    let fy26Rows = [], fy26PageToken = null;
-    do {
-        const url = `https://coda.io/apis/v1/docs/${CODA_DOC}/tables/${CODA_TABLE_FY26}/rows?limit=500&valueFormat=simpleWithArrays${fy26PageToken ? '&pageToken=' + fy26PageToken : ''}`;
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${CODA_TOKEN}` } });
-        const data = await res.json();
-        fy26Rows = fy26Rows.concat(data.items || []);
-        fy26PageToken = data.nextPageToken || null;
-    } while (fy26PageToken);
-
-    // Filter FY26 to Nov 1 2025+ only, then merge (dedup happens in caller)
-    const fy26Filtered = fy26Rows.filter(r => {
-        const d = r.values?.['c-qZ5pWze-qr'];
-        return d && d.substring(0, 10) >= '2025-11-01';
-    });
-    return rows.concat(fy26Filtered);
+    return rows;
 }
 
 async function syncFromCoda() {
