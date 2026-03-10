@@ -2728,6 +2728,18 @@ async function silentSyncFromCoda() {
         }).eq('campaign_name', r.name).eq('send_date', r.goLive)
     ));
 
+    // Purge future campaigns (Mar 2026+) not in FY27 roadmap and with no metrics
+    const fy27KeysSilent = new Set(allDeduped.filter(r => r.goLive).map(r => `${r.name}|${r.goLive}`));
+    const { data: silentOrphans } = await db.from('lifecycle_campaigns')
+        .select('campaign_id, campaign_name, send_date')
+        .gte('send_date', '2026-03-01')
+        .is('open_rate', null)
+        .is('emails_sent', null);
+    const silentToDelete = (silentOrphans || []).filter(c => !fy27KeysSilent.has(`${c.campaign_name}|${c.send_date}`));
+    if (silentToDelete.length) {
+        await Promise.all(silentToDelete.map(c => db.from('lifecycle_campaigns').delete().eq('campaign_id', c.campaign_id)));
+    }
+
     await loadCalendar();
 }
 
@@ -2869,6 +2881,21 @@ async function syncFromCoda() {
         if (autoDateMoved) await loadCalendar();
     }
 
+    // Purge future campaigns (Mar 2026+) not in FY27 roadmap and with no metrics
+    const fy27Keys = new Set(deduped.filter(r => r.goLive).map(r => `${r.name}|${r.goLive}`));
+    const { data: futureOrphans } = await db.from('lifecycle_campaigns')
+        .select('campaign_id, campaign_name, send_date')
+        .gte('send_date', '2026-03-01')
+        .is('open_rate', null)
+        .is('emails_sent', null);
+    const toDelete = (futureOrphans || []).filter(c => !fy27Keys.has(`${c.campaign_name}|${c.send_date}`));
+    let purgedCount = 0;
+    if (toDelete.length) {
+        await Promise.all(toDelete.map(c => db.from('lifecycle_campaigns').delete().eq('campaign_id', c.campaign_id)));
+        purgedCount = toDelete.length;
+        await loadCalendar();
+    }
+
     panel.innerHTML = `
         <div class="sync-panel">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -2879,6 +2906,7 @@ async function syncFromCoda() {
                 </div>
             </div>
             ${autoDateMoved ? `<p style="margin-bottom:10px;font-size:12px;color:var(--success);">✓ ${autoDateMoved} campaign date${autoDateMoved !== 1 ? 's' : ''} updated automatically.</p>` : ''}
+            ${purgedCount ? `<p style="margin-bottom:10px;font-size:12px;color:var(--success);">✓ ${purgedCount} stale campaign${purgedCount !== 1 ? 's' : ''} removed (no longer in FY27 roadmap).</p>` : ''}
             ${genuinelyNew.map(r => `
                 <div class="sync-row">
                     <span class="sync-row-name">${r.name}</span>
