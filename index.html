@@ -144,6 +144,18 @@
         .cal-event-Newsletter   { background: #1e2a3d; color: #93c5fd; }
         .cal-event-Ops          { background: #1e1e2e; color: #94a3b8; }
         .cal-event-default      { background: #334155; color: #e2e8f0; }
+        /* ── SHIPPED SECTION ── */
+        .shipped-range-btn { font-size: 11px; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+        .shipped-range-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .shipped-range-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .shipped-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+        .shipped-row:last-child { border-bottom: none; }
+        .shipped-row:hover .shipped-name { color: var(--primary); }
+        .shipped-name { font-size: 13px; font-weight: 500; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .shipped-pill { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; display: inline-block; }
+        .shipped-meta { font-size: 11px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+        .shipped-copy-btn { font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
+        .shipped-copy-btn:hover { color: var(--text); border-color: var(--text); }
         .cal-layout { display: flex; gap: 24px; align-items: flex-start; }
         .cal-main { flex: 1; min-width: 0; }
         .cal-legend { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; padding-top: 4px; position: sticky; top: 16px; align-self: flex-start; }
@@ -427,6 +439,21 @@
                     <div id="dash-backlog-card" class="dash-stat-card"><div class="empty" style="padding:16px;">Loading…</div></div>
                 </div>
             </div>
+        </div>
+
+        <!-- Shipped -->
+        <div style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <div class="dash-section-label" style="margin:0;">Shipped</div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button class="shipped-range-btn" data-range="this-week">This week</button>
+                    <button class="shipped-range-btn active" data-range="last-week">Last week</button>
+                    <button class="shipped-range-btn" data-range="this-month">This month</button>
+                    <button class="shipped-range-btn" data-range="last-month">Last month</button>
+                    <button class="shipped-copy-btn" id="shipped-copy-btn" title="Copy list for Slack">Copy</button>
+                </div>
+            </div>
+            <div id="dash-shipped" class="dash-stat-card" style="padding:0 16px;"></div>
         </div>
 
         <!-- Upcoming Product Launches -->
@@ -1215,6 +1242,7 @@ async function loadDashboard() {
     renderABSummary(abData || []);
     renderBacklogSnapshot(backlogData || []);
     renderBenchmarkGrid(q1, all);
+    renderShipped(q1);
     renderUpcomingLaunches();
 }
 
@@ -1467,6 +1495,119 @@ function switchToProductUpdates() {
     document.querySelector('nav button[data-tab="productupdates"]').classList.add('active');
     document.getElementById('tab-productupdates').classList.add('active');
     loadProductUpdates();
+}
+
+// ── SHIPPED SECTION ──────────────────────────────────────────────────────────
+let _shippedAll  = [];
+let _shippedRange = 'last-week';
+
+function getShippedDateRange(range) {
+    const today = new Date();
+    const fmt = d => d.toISOString().slice(0, 10);
+    const toMonday = d => {
+        const m = new Date(d);
+        m.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        m.setHours(0, 0, 0, 0);
+        return m;
+    };
+    if (range === 'this-week') {
+        const mon = toMonday(today);
+        const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+        return { from: fmt(mon), to: fmt(sun), label: `${fmtDate(fmt(mon))} – ${fmtDate(fmt(sun))}` };
+    }
+    if (range === 'last-week') {
+        const thisMon  = toMonday(today);
+        const lastMon  = new Date(thisMon); lastMon.setDate(thisMon.getDate() - 7);
+        const lastSun  = new Date(thisMon); lastSun.setDate(thisMon.getDate() - 1);
+        return { from: fmt(lastMon), to: fmt(lastSun), label: `${fmtDate(fmt(lastMon))} – ${fmtDate(fmt(lastSun))}` };
+    }
+    if (range === 'this-month') {
+        const from = new Date(today.getFullYear(), today.getMonth(), 1);
+        const to   = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        return { from: fmt(from), to: fmt(to), label: CAL_MONTHS[today.getMonth()] + ' ' + today.getFullYear() };
+    }
+    if (range === 'last-month') {
+        const from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const to   = new Date(today.getFullYear(), today.getMonth(), 0);
+        return { from: fmt(from), to: fmt(to), label: CAL_MONTHS[from.getMonth()] + ' ' + from.getFullYear() };
+    }
+}
+
+function renderShipped(campaigns) {
+    _shippedAll = campaigns;
+    _renderShippedList();
+
+    document.querySelectorAll('.shipped-range-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.shipped-range-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            _shippedRange = btn.dataset.range;
+            _renderShippedList();
+        });
+    });
+
+    document.getElementById('shipped-copy-btn').addEventListener('click', _copyShippedList);
+}
+
+function _isShipped(c) {
+    return c.notes && c.notes.split('·').map(s => s.trim()).some(s => s.toLowerCase() === 'done');
+}
+
+function _renderShippedList() {
+    const { from, to, label } = getShippedDateRange(_shippedRange);
+    const shipped = _shippedAll
+        .filter(c => c.send_date && c.send_date >= from && c.send_date <= to && _isShipped(c))
+        .sort((a, b) => b.send_date.localeCompare(a.send_date));
+
+    const el = document.getElementById('dash-shipped');
+    if (!shipped.length) {
+        el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:14px 0;">No campaigns shipped in this period.</div>`;
+        return;
+    }
+
+    const countLabel = `<span style="font-size:12px;color:var(--muted);margin-bottom:2px;display:block;">${shipped.length} campaign${shipped.length !== 1 ? 's' : ''} · ${label}</span>`;
+
+    const rows = shipped.map(c => {
+        const cls  = (c.category || '').replace(/[\s-]/g, '').replace(/[^a-zA-Z]/g, '') || 'default';
+        const name = (c.campaign_name || '').replace(/</g, '&lt;');
+        const date = c.send_date ? fmtDate(c.send_date) : '—';
+        const owner = c.created_by ? c.created_by.split(',')[0].trim().split(' ')[0] : '';
+        return `<div class="shipped-row" data-id="${c.campaign_id}">
+            <span class="shipped-name" title="${name}">${name}</span>
+            <span class="shipped-pill cal-event-${cls}">${c.category || 'Uncategorised'}</span>
+            ${c.channel ? `<span class="shipped-meta">${c.channel}</span>` : ''}
+            <span class="shipped-meta">${date}</span>
+            ${owner ? `<span class="shipped-meta">${owner}</span>` : ''}
+        </div>`;
+    }).join('');
+
+    el.innerHTML = countLabel + rows;
+
+    el.querySelectorAll('.shipped-row').forEach(row => {
+        row.addEventListener('click', () => {
+            const campaign = _shippedAll.find(c => c.campaign_id === row.dataset.id);
+            if (campaign) showCampaignModal(campaign);
+        });
+    });
+}
+
+function _copyShippedList() {
+    const { from, to, label } = getShippedDateRange(_shippedRange);
+    const shipped = _shippedAll
+        .filter(c => c.send_date && c.send_date >= from && c.send_date <= to && _isShipped(c))
+        .sort((a, b) => b.send_date.localeCompare(a.send_date));
+
+    if (!shipped.length) { alert('Nothing shipped in this period.'); return; }
+
+    const lines = [
+        `*Lifecycle shipped · ${label}* (${shipped.length} campaign${shipped.length !== 1 ? 's' : ''})`,
+        ...shipped.map(c => `• ${c.campaign_name}${c.category ? ' (' + c.category + ')' : ''}${c.send_date ? ' · ' + fmtDate(c.send_date) : ''}`),
+    ];
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+        const btn = document.getElementById('shipped-copy-btn');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+    });
 }
 
 function renderBenchmarkGrid(q1, all) {
