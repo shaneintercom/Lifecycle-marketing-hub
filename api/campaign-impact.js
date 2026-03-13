@@ -441,7 +441,7 @@ const LABEL_OVERRIDES = {
   COUNT_INBOX_CONVERSATIONS_FIN_SENT_INLINE_ANSWER:                   'Fin inline answer conversations',
   COUNT_INBOX_CONVERSATIONS_FIN_SENT_RELEVANT_CONTENT:                'Fin relevant content conversations',
   COUNT_INBOX_CONVERSATIONS_FIN_SENT_AI_AGENT_WORKFLOW:               'Fin AI agent workflow conversations',
-  COUNT_INBOX_CONVERSATIONS_WITH_FIN_GUIDANCE:                        'Conversations with Fin guidance',
+  COUNT_INBOX_CONVERSATIONS_WITH_FIN_GUIDANCE:                        'Fin guidance — conversations using guidance',
   COUNT_INBOX_CONVERSATIONS_HARD_RESOLVED:                            'Fin hard resolved conversations',
   COUNT_INBOX_CONVERSATIONS_SOFT_RESOLVED:                            'Fin soft resolved conversations',
   COUNT_INBOX_CONVERSATIONS_HARD_RESOLVED_BY_FIN_AI_ANSWER:           'Hard resolved by Fin AI answer',
@@ -577,6 +577,27 @@ const LABEL_OVERRIDES = {
   COUNT_ADMINS_OPENED_INBOX:                                          'Teammates opened inbox',
   // Tickets
   COUNT_TICKETS:                                                      'Tickets (total)',
+  // Fin Setup & Configuration
+  COUNT_PROCEDURES_CONFIGURED:                                         'Fin procedures — configured',
+  COUNT_PROCEDURES_STARTED:                                            'Fin procedures — started',
+  COUNT_PROCEDURES_FINISHED:                                           'Fin procedures — finished',
+  COUNT_LIVE_FIN_TASKS:                                                'Fin tasks — live (total)',
+  COUNT_FIRST_SET_LIVE_FIN_TASKS:                                      'Fin tasks — first set live',
+  COUNT_NEW_FIN_TASKS:                                                 'Fin tasks — new',
+  COUNT_DRAFT_FIN_TASKS:                                               'Fin tasks — in draft',
+  COUNT_PAUSED_FIN_TASKS:                                              'Fin tasks — paused',
+  COUNT_ANSWERS_LIVE:                                                  'Fin custom answers — live',
+  COUNT_INBOX_CONVERSATIONS_WITH_ATTRIBUTE:                            'Conversation attributes — used',
+  COUNT_INBOX_CONVERSATIONS_WITH_NON_DEFAULT_ATTRIBUTE:                'Conversation attributes — custom',
+  COUNT_VISITS_FIN_SETUP:                                              'Fin setup — page visits',
+  COUNT_VISITS_FIN_CONTENT:                                            'Fin content — page visits',
+  COUNT_VISITS_FIN_SETTINGS:                                           'Fin settings — page visits',
+  COUNT_VISITS_FIN_CONTENT_SUGGESTIONS:                                'Fin content suggestions — visits',
+  COUNT_VISITS_CUSTOM_ANSWERS:                                         'Custom answers — page visits',
+  COUNT_TEAMMATES_VISITED_FIN_SETUP:                                   'Fin setup — teammates visited',
+  COUNT_TEAMMATES_VISITED_FIN_CONTENT:                                 'Fin content — teammates visited',
+  COUNT_TEAMMATES_VISITED_FIN_SETTINGS:                                'Fin settings — teammates visited',
+  COUNT_TEAMMATES_VISITED_CUSTOM_ANSWERS:                              'Custom answers — teammates visited',
 };
 
 // ─── Auto-label fallback ──────────────────────────────────────────────────────
@@ -646,6 +667,7 @@ function autoGroup(col) {
   if (/SALES_AGENT|CONTACT_CAPTURES|ABANDONED_CONVERSATIONS|DISQUALIFIED|PRODUCT_DISCOVERY|UNCHARGEABLE/.test(col)) return 'Sales Agent';
   if (/TOPICS_|TOPIC_TRENDS/.test(col)) return 'Topics & AI Insights';
   if (/AI_INSIGHTS_QUERY_TYPE/.test(col)) return 'Topics & AI Insights';
+  if (/COUNT_LIVE_FIN_TASKS|COUNT_FIRST_SET_LIVE_FIN_TASKS|COUNT_NEW_FIN_TASKS|COUNT_DRAFT_FIN_TASKS|COUNT_PAUSED_FIN_TASKS|COUNT_ANSWERS_LIVE|WITH_FIN_GUIDANCE|_ATTRIBUTE$|VISITS_FIN_|VISITED_FIN_|VISITS_CUSTOM_ANSWERS|VISITED_CUSTOM_ANSWERS/.test(col)) return 'Fin Setup & Configuration';
   if (/WITH_PROCEDURES|PROCEDURES_CONFIGURED|PROCEDURES_STARTED|PROCEDURES_FINISHED/.test(col)) return 'Fin Procedures';
   if (/FIN_VOICE|INBOUND_PHONE_CONVERSATIONS_WITH_FIN/.test(col)) return 'Phone / Fin Voice';
   if (/^COUNT_PHONE|^COUNT_INBOUND_PHONE|^COUNT_CALLS|^COUNT_MESSENGER_CALL|^TOTAL_CALL|WITH_CALL|WITH_INBOUND_CALL|WITH_OUTBOUND_CALL|PHONE_SETTING/.test(col)) return 'Phone / Calls';
@@ -679,7 +701,7 @@ const METRIC_LABELS = Object.fromEntries(Object.entries(METRICS).map(([k, v]) =>
 
 // Grouped for the frontend searchable picker, sorted alphabetically within each group
 const GROUP_ORDER = [
-  'Inbox / Conversations', 'Fin AI', 'Fin Procedures', 'CSAT / Ratings', 'CX Score',
+  'Inbox / Conversations', 'Fin AI', 'Fin Setup & Configuration', 'Fin Procedures', 'CSAT / Ratings', 'CX Score',
   'Channels — Core', 'Channels — Messaging', 'Topics & AI Insights',
   'Workflows & Automation', 'Articles / Help Center', 'Outbound & Engagement',
   'Phone / Calls', 'Phone / Fin Voice', 'Copilot / Suggestions',
