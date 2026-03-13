@@ -827,6 +827,118 @@ const PRODUCT_ACTIONS = {
     filter: 'IS_FIN_TASK = FALSE AND IS_PROCEDURE = FALSE',
     note: 'Standard workflows (not Fin Tasks or Procedures) first set live. Broader activation signal than Fin-specific workflows.',
   },
+
+  // ── CMF Milestones (from MART_SALES_APPS_CMF — pre-built first-event dates per workspace) ──
+  'ACTION:FIRST_ARTICLE_LIVE': {
+    label: 'Knowledge — workspace published their first live Help Center article ↗',
+    table: 'CORE_PRODUCT.MART_SALES_APPS_CMF',
+    dateCol: 'CALENDAR_DATE_FIRST_ARTICLE_LIVE',
+    note: 'Counts workspaces whose first-ever Help Center article went live in the 30-day post-campaign window.',
+  },
+  'ACTION:FIRST_MESSENGER_INSTALLED': {
+    label: 'Messenger — workspace installed the Intercom Messenger for the first time ↗',
+    table: 'CORE_PRODUCT.MART_SALES_APPS_CMF',
+    dateCol: 'CALENDAR_DATE_FIRST_INSTALLED_MESSENGER',
+    note: 'Counts workspaces that installed the Messenger for the first time in the post-campaign window.',
+  },
+  'ACTION:FIRST_OUTBOUND_SENT': {
+    label: 'Outbound — workspace sent their first outbound message ↗',
+    table: 'CORE_PRODUCT.MART_SALES_APPS_CMF',
+    dateCol: 'CALENDAR_DATE_FIRST_OUTBOUND_RECEIPT',
+    note: 'Counts workspaces that sent their very first outbound message (any type) in the post-campaign window.',
+  },
+  'ACTION:FIRST_INBOUND_EMAIL': {
+    label: 'Email — workspace received their first inbound email conversation ↗',
+    table: 'CORE_PRODUCT.MART_SALES_APPS_CMF',
+    dateCol: 'CALENDAR_DATE_FIRST_INBOUND_EMAIL_CONVERSATION',
+    note: 'Counts workspaces that received their first ever inbound email conversation in the post-campaign window.',
+  },
+  'ACTION:FIRST_INTEGRATION_INSTALLED': {
+    label: 'Integrations — workspace installed their first integration ↗',
+    table: 'CORE_PRODUCT.MART_SALES_APPS_CMF',
+    dateCol: 'CALENDAR_DATE_INTEGRATION_FIRST_INSTALLED',
+    note: 'Counts workspaces that installed their first Intercom integration in the post-campaign window.',
+  },
+  'ACTION:REACHED_GO_LIVE': {
+    label: 'CMF — workspace reached the Intercom go-live milestone ↗',
+    table: 'CORE_PRODUCT.MART_SALES_APPS_CMF',
+    dateCol: 'CALENDAR_DATE_REACHED_GO_LIVE',
+    note: 'CMF go-live: workspace completed core Intercom setup (Messenger installed, second teammate active, integration, article live, outbound sent). Strong top-level activation signal.',
+  },
+
+  // ── Feature Access (from CORE_COMMON.DIM_APPS — workspace-level snapshot) ──
+  'ACTION:PROCEDURE_ACCESS_ENABLED': {
+    label: 'Fin procedures — workspace had procedures feature access enabled ↗',
+    table: 'CORE_COMMON.DIM_APPS',
+    dateCol: 'PROCEDURE_ACCESS_ENABLED_AT',
+    note: 'Tracks when the Fin procedures feature was first enabled for the workspace. Typically admin/CS-triggered.',
+  },
+  'ACTION:TASK_ACCESS_ENABLED': {
+    label: 'Fin tasks — workspace had Fin tasks feature access enabled ↗',
+    table: 'CORE_COMMON.DIM_APPS',
+    dateCol: 'TASK_ACCESS_ENABLED_AT',
+    note: 'Tracks when the Fin tasks feature was first enabled for the workspace. Typically admin/CS-triggered.',
+  },
+
+  // ── Fin Procedure Execution (from FCT_PROCEDURE_EXECUTIONS) ──
+  'ACTION:FIN_PROCEDURE_EXECUTED': {
+    label: 'Fin procedures — workspace first ran a Fin procedure execution ↗',
+    table: 'CORE_PRODUCT.FCT_PROCEDURE_EXECUTIONS',
+    dateCol: 'PROCEDURE_EXECUTION_STARTED_AT',
+    note: 'A procedure execution means a Fin conversation triggered a procedure to run. Measures actual Fin procedure usage, not just setup.',
+  },
+  'ACTION:FIN_PROCEDURE_WITH_ATTRIBUTE_UPDATE': {
+    label: 'Fin procedures — workspace ran a procedure that updated contact attributes ↗',
+    table: 'CORE_PRODUCT.FCT_PROCEDURE_EXECUTIONS',
+    dateCol: 'PROCEDURE_EXECUTION_STARTED_AT',
+    filter: 'COUNT_UPDATE_ATTRIBUTES_TOOL_EVENTS > 0',
+    note: 'Procedure execution that used the "Update Attributes" tool — Fin collected and wrote data back to the contact record.',
+  },
+
+  // ── Content & Knowledge (article/custom answer creation) ──
+  'ACTION:ARTICLE_CREATED': {
+    label: 'Knowledge — workspace created a Help Center article ↗',
+    table: 'CORE_PRODUCT.DIM_ARTICLES_HISTORY_REGIONAL',
+    dateCol: 'CREATED_AT',
+    note: 'Tracks workspaces that created any Help Center article in the post-campaign window. Counts creation, not necessarily publication.',
+  },
+  'ACTION:CUSTOM_ANSWER_CREATED': {
+    label: 'Knowledge — workspace created a Fin custom answer ↗',
+    table: 'CORE_PRODUCT.DIM_ANSWERS_HISTORY_REGIONAL',
+    dateCol: 'CREATED_AT',
+    note: 'Custom answers are manually authored Q&A pairs for Fin. Tracks workspaces that created at least one custom answer post-campaign.',
+  },
+
+  // ── Outbound messages ──
+  'ACTION:OUTBOUND_MESSAGE_SET_LIVE': {
+    label: 'Outbound — workspace set an outbound message live ↗',
+    table: 'CORE_PRODUCT.FCT_OUTBOUND_CONTENT_REGIONAL',
+    dateCol: 'WENT_LIVE_AT',
+    note: 'Any outbound message type (chat, email, post, banner, etc.) first set live in the post-campaign window.',
+  },
+
+  // ── Channel-specific Fin conversations (from FCT_INBOX_CONVERSATIONS) ──
+  // dateCol = LATEST_FIN_CREATED_AT so NULL rows (no Fin involvement) are excluded automatically
+  'ACTION:FIN_HANDLES_EMAIL_CONVERSATION': {
+    label: 'Fin on Email — workspace had Fin handle an email conversation ↗',
+    table: 'CORE_PRODUCT.FCT_INBOX_CONVERSATIONS',
+    dateCol: 'LATEST_FIN_CREATED_AT',
+    filter: "CONTENT_TYPE = 'email'",
+    note: 'Counts workspaces where Fin sent at least one AI answer in an email conversation post-campaign.',
+  },
+  'ACTION:FIN_HANDLES_WHATSAPP_CONVERSATION': {
+    label: 'Fin on WhatsApp — workspace had Fin handle a WhatsApp conversation ↗',
+    table: 'CORE_PRODUCT.FCT_INBOX_CONVERSATIONS',
+    dateCol: 'LATEST_FIN_CREATED_AT',
+    filter: "CONTENT_TYPE = 'whatsapp'",
+    note: 'Counts workspaces where Fin sent at least one AI answer in a WhatsApp conversation post-campaign.',
+  },
+  'ACTION:TICKET_CREATED': {
+    label: 'Tickets — workspace had a ticket created (end user or teammate) ↗',
+    table: 'CORE_PRODUCT.FCT_INBOX_CONVERSATIONS',
+    dateCol: 'TICKET_CREATED_AT',
+    note: 'Tracks workspaces where at least one conversation was converted into a ticket in the post-campaign window.',
+  },
 };
 
 function generateJWT() {
