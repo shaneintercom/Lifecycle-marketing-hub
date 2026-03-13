@@ -698,30 +698,91 @@
 
     <!-- REPORT GENERATOR -->
     <div id="tab-reports" class="tab-content">
-        <h2>Generate Report</h2>
-        <div class="card">
+        <h2>Campaign Analysis</h2>
+
+        <div class="card" style="margin-bottom:20px;">
             <div class="inner-tabs" style="margin-bottom:20px;">
-                <button class="active" onclick="switchReportMode('period', this)">Date Range</button>
-                <button onclick="switchReportMode('single', this)">Single Campaign</button>
+                <button class="active" onclick="switchReportMode('single', this)">Single Campaign</button>
+                <button onclick="switchReportMode('period', this)">Date Range</button>
             </div>
-            <div id="r-mode-period">
+
+            <!-- ── Single Campaign ───────────────────────────────────────── -->
+            <div id="r-mode-single">
+                <div class="grid-2" style="gap:12px;margin-bottom:14px;">
+                    <div class="field" style="margin-bottom:0;">
+                        <label>Campaign</label>
+                        <select id="r-campaign"><option value="">Loading...</option></select>
+                    </div>
+                    <div class="field" style="margin-bottom:0;">
+                        <label>Feature to measure <span style="font-weight:400;color:var(--muted);">(optional &mdash; requires Snowflake)</span></label>
+                        <div id="ci-metric-wrap" style="position:relative;">
+                            <input type="text" id="ci-metric-search" placeholder="e.g. Fin AI agent conversations, suggestions…" autocomplete="off"
+                                style="width:100%;padding-right:28px;"
+                                oninput="filterCIMetrics(this.value)"
+                                onfocus="openCIDropdown()"
+                                onblur="setTimeout(closeCIDropdown,150)">
+                            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:12px;">&#9660;</span>
+                            <input type="hidden" id="ci-metric" value="">
+                            <div id="ci-metric-dropdown" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#1e293b;border:1px solid #334155;border-radius:6px;max-height:280px;overflow-y:auto;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="field" style="margin-bottom:14px;">
+                    <label>Series / Ruleset ID <span style="font-weight:400;color:var(--muted);">— optional &middot; find in Intercom URL: &hellip;/outbound/series/<strong style="color:var(--text);">XXXXXXXX</strong></span></label>
+                    <input type="number" id="ci-ruleset-id" placeholder="e.g. 57652582" style="max-width:220px;">
+                </div>
+            </div>
+
+            <!-- ── Date Range ─────────────────────────────────────────────── -->
+            <div id="r-mode-period" style="display:none;">
                 <div class="grid-2">
                     <div class="field"><label>From</label><input type="date" id="r-from"></div>
                     <div class="field"><label>To</label><input type="date" id="r-to"></div>
                 </div>
             </div>
-            <div id="r-mode-single" style="display:none;">
-                <div class="field"><label>Campaign</label><select id="r-campaign"><option value="">Loading...</option></select></div>
-            </div>
-            <div class="field"><label>Report Type</label>
+
+            <div class="field" style="margin-top:4px;margin-bottom:14px;">
+                <label>Report Type</label>
                 <select id="r-type">
                     <option value="stakeholder">Stakeholder update</option>
                     <option value="postmortem">Post-mortem / retrospective</option>
                     <option value="exec">Executive summary</option>
                 </select>
             </div>
-            <button class="btn btn-primary" onclick="generateReport()">Generate Report</button>
+            <div id="r-btn-single">
+                <button class="btn btn-primary" id="r-analyze-btn" onclick="analyzeFullCampaign()">Analyze Campaign</button>
+                <span id="ci-status" style="margin-left:12px;font-size:12px;color:var(--muted);"></span>
+            </div>
+            <div id="r-btn-period" style="display:none;">
+                <button class="btn btn-primary" onclick="generateReport()">Generate Report</button>
+            </div>
         </div>
+
+        <!-- Snowflake setup warning -->
+        <div id="ci-setup-card" style="display:none;" class="card">
+            <div style="font-size:13px;font-weight:700;color:#fcd34d;margin-bottom:12px;">&#9888; Snowflake not connected</div>
+            <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:12px;">
+                Feature Impact queries Snowflake for product usage data. Add these variables in Vercel
+                (Settings &rarr; Environment Variables), then redeploy:
+            </p>
+            <div style="background:#0f172a;border-radius:6px;padding:14px;font-size:12px;font-family:monospace;color:#e2e8f0;line-height:2;">
+                SNOWFLAKE_PRIVATE_KEY=&lt;RSA private key PEM, with newlines as \n&gt;<br>
+                SNOWFLAKE_ACCOUNT=PEOSZPH-INTERCOM_US<br>
+                SNOWFLAKE_USER=SHANE_RYAN<br>
+                SNOWFLAKE_WAREHOUSE=WH_INTERCOMRADE
+            </div>
+            <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.7;">
+                Generate a key pair:<br>
+                <code style="background:#1e293b;padding:2px 6px;border-radius:3px;">openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt &gt; snowflake_key.pem</code><br>
+                Then ask the data team to register your public key in Snowsight:<br>
+                <code style="background:#1e293b;padding:2px 6px;border-radius:3px;">ALTER USER SHANE_RYAN SET RSA_PUBLIC_KEY='...'</code>
+            </p>
+        </div>
+
+        <!-- Error state -->
+        <div id="ci-error" style="display:none;" class="alert alert-error"></div>
+
+        <!-- Unified results (email performance + feature impact) -->
         <div id="report-out" style="display:none;margin-top:24px;"></div>
     </div>
 
@@ -3539,7 +3600,11 @@ function switchReportMode(mode, btn) {
     btn.classList.add('active');
     document.getElementById('r-mode-period').style.display = mode === 'period' ? '' : 'none';
     document.getElementById('r-mode-single').style.display = mode === 'single' ? '' : 'none';
-    document.getElementById('report-out').style.display = 'none';
+    document.getElementById('r-btn-single').style.display  = mode === 'single' ? '' : 'none';
+    document.getElementById('r-btn-period').style.display  = mode === 'period' ? '' : 'none';
+    document.getElementById('report-out').style.display    = 'none';
+    document.getElementById('ci-setup-card').style.display = 'none';
+    document.getElementById('ci-error').style.display      = 'none';
 }
 
 async function loadCampaignsForReport() {
@@ -3575,28 +3640,75 @@ function avgMetric(arr, field) {
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
 }
 
+async function analyzeFullCampaign() {
+    const id          = document.getElementById('r-campaign').value;
+    const rulesetId   = document.getElementById('ci-ruleset-id').value.trim();
+    const featureMetric = document.getElementById('ci-metric').value;
+    const type        = document.getElementById('r-type').value;
+    const btn         = document.getElementById('r-analyze-btn');
+    const statusEl    = document.getElementById('ci-status');
+
+    if (!id) { alert('Please select a campaign.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Analyzing…';
+    statusEl.textContent = rulesetId ? 'Fetching email data + querying Snowflake…' : 'Fetching campaign data…';
+    document.getElementById('ci-setup-card').style.display = 'none';
+    document.getElementById('ci-error').style.display      = 'none';
+    document.getElementById('report-out').style.display    = 'none';
+
+    try {
+        // Always fetch email data from Supabase; optionally fetch feature impact from Snowflake in parallel
+        const supabasePromises = Promise.all([
+            db.from('lifecycle_campaigns').select('*').eq('campaign_id', id).single(),
+            db.from('lifecycle_campaigns').select('open_rate, click_rate, click_to_open_rate, category').not('send_date', 'is', null),
+        ]);
+
+        let impactPromise = null;
+        if (rulesetId && featureMetric) {
+            impactPromise = fetch('/api/campaign-impact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rulesetId, featureMetric }),
+            }).then(r => r.json());
+        }
+
+        const [[{ data: single }, { data: allHistory }], impactRaw] = await Promise.all([
+            supabasePromises,
+            impactPromise || Promise.resolve(null),
+        ]);
+
+        if (!single) throw new Error('Campaign not found');
+
+        let impactData = null;
+        if (impactRaw) {
+            if (impactRaw.setupRequired) {
+                document.getElementById('ci-setup-card').style.display = '';
+            } else if (impactRaw.error) {
+                document.getElementById('ci-error').textContent = `Feature Impact: ${impactRaw.error}`;
+                document.getElementById('ci-error').style.display = '';
+            } else {
+                impactData = impactRaw;
+            }
+        }
+
+        renderFullCampaignReport(single, allHistory || [], type, impactData);
+
+    } catch (e) {
+        alert(`Error: ${e.message}`);
+    } finally {
+        btn.textContent = 'Analyze Campaign';
+        btn.disabled    = false;
+        statusEl.textContent = '';
+    }
+}
+
 async function generateReport() {
-    const isSingle = document.getElementById('r-mode-single').style.display !== 'none';
-    const type     = document.getElementById('r-type').value;
-    const btn      = event.target;
+    const type = document.getElementById('r-type').value;
+    const btn  = event.target;
     btn.textContent = 'Generating...'; btn.disabled = true;
 
     let from, to, periodLabel;
-
-    if (isSingle) {
-        const id = document.getElementById('r-campaign').value;
-        if (!id) { btn.textContent = 'Generate Report'; btn.disabled = false; alert('Please select a campaign.'); return; }
-        const { data: single } = await db.from('lifecycle_campaigns').select('*').eq('campaign_id', id).single();
-        if (!single) { btn.textContent = 'Generate Report'; btn.disabled = false; return; }
-        from = single.send_date || '2000-01-01';
-        to   = single.send_date || '2099-01-01';
-        periodLabel = `${single.campaign_name}`;
-        // For single campaign mode, build a focused single-campaign report
-        const { data: allHistory } = await db.from('lifecycle_campaigns').select('open_rate, click_rate, click_to_open_rate, category').not('send_date', 'is', null);
-        btn.textContent = 'Generate Report'; btn.disabled = false;
-        renderSingleCampaignReport(single, allHistory || [], type);
-        return;
-    }
 
     from = val('r-from');
     to   = val('r-to');
@@ -3777,7 +3889,96 @@ async function generateReport() {
     };
 }
 
-function renderSingleCampaignReport(c, history, type) {
+function buildImpactNarrativeData(d) {
+    const sum = d.summary || [];
+    const get = (cohort, period) => sum.find(r => r.cohort === cohort && r.period === period) || {};
+    const rAfter  = get('recipient', 'after');
+    const rBefore = get('recipient', 'before');
+    const cAfter  = get('control',   'after');
+    const cBefore = get('control',   'before');
+    const recipientLift = (rAfter.avgPerApp || 0) - (rBefore.avgPerApp || 0);
+    const controlLift   = (cAfter.avgPerApp  || 0) - (cBefore.avgPerApp  || 0);
+    return {
+        featureLabel:       d.featureLabel,
+        matchedWorkspaces:  d.campaign?.matchedWorkspaces,
+        recipientBefore:    rBefore.avgPerApp,
+        recipientAfter:     rAfter.avgPerApp,
+        recipientLift,
+        controlBefore:      cBefore.avgPerApp,
+        controlAfter:       cAfter.avgPerApp,
+        controlLift,
+        campaignLift:       recipientLift - controlLift,
+        recipientPctActive: rAfter.pctActive,
+        controlPctActive:   cAfter.pctActive,
+    };
+}
+
+function buildImpactSection(d) {
+    if (!d || !d.summary) return '';
+    const nd   = buildImpactNarrativeData(d);
+    const fmt4 = v => v != null ? Number(v).toFixed(2) : '—';
+    const pct  = v => v != null ? Number(v).toFixed(1) + '%' : '—';
+    const sign = v => v > 0 ? '+' : '';
+    const liftColor = nd.campaignLift > 0 ? '#4ade80' : nd.campaignLift < 0 ? '#f87171' : 'var(--muted)';
+
+    const recipientRows = d.summary.filter(r => r.cohort === 'recipient');
+    const controlRows   = d.summary.filter(r => r.cohort === 'control');
+    const rBefore = recipientRows.find(r => r.period === 'before') || {};
+    const rAfter  = recipientRows.find(r => r.period === 'after')  || {};
+    const cBefore = controlRows.find(r => r.period === 'before')   || {};
+    const cAfter  = controlRows.find(r => r.period === 'after')    || {};
+
+    const compRows = [
+        ['Recipients', rBefore, rAfter],
+        ['Control',    cBefore, cAfter],
+    ].map(([label, before, after]) => {
+        const change = (after.avgPerApp || 0) - (before.avgPerApp || 0);
+        const changePct = before.avgPerApp ? ((change / before.avgPerApp) * 100) : null;
+        return `<tr>
+            <td style="font-weight:600;">${label} <span style="font-weight:400;color:var(--muted);font-size:11px;">(${(before.appCount || 0).toLocaleString()} workspaces)</span></td>
+            <td>${fmt4(before.avgPerApp)}</td>
+            <td>${fmt4(after.avgPerApp)}</td>
+            <td style="color:${change > 0 ? '#4ade80' : change < 0 ? '#f87171' : 'inherit'};font-weight:600;">${sign(change)}${fmt4(change)}${changePct != null ? ` <span style="font-size:11px;font-weight:400;">(${sign(changePct)}${changePct.toFixed(0)}%)</span>` : ''}</td>
+            <td>${pct(after.pctActive)}</td>
+        </tr>`;
+    }).join('');
+
+    const timelineSVG = buildCITimelineSVG(d.timeline, d.campaign?.sendDate);
+
+    return `<div class="report-section">
+        <h3>Feature Impact &mdash; ${d.featureLabel}</h3>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+            ±30 days around send date &middot; ${(d.campaign?.matchedWorkspaces || 0).toLocaleString()} recipient workspaces matched &middot; workspace match rate ${d.campaign?.matchRate || 0}%
+        </p>
+        <div style="display:grid;grid-template-columns:160px 1fr;gap:16px;margin-bottom:16px;align-items:start;">
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;text-align:center;padding:24px 12px;">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;">Campaign Lift</div>
+                <div style="font-size:36px;font-weight:800;line-height:1;color:${liftColor};">${sign(nd.campaignLift)}${fmt4(nd.campaignLift)}</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">avg events per workspace</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;">Recipients ${sign(nd.recipientLift)}${fmt4(nd.recipientLift)} vs Control ${sign(nd.controlLift)}${fmt4(nd.controlLift)}</div>
+            </div>
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead><tr>
+                        <th>Cohort</th><th>Before (&minus;30d)</th><th>After (+30d)</th><th>Change</th><th>% workspaces active</th>
+                    </tr></thead>
+                    <tbody>${compRows}</tbody>
+                </table>
+            </div>
+        </div>
+        <div style="margin-top:16px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px;">Daily usage &mdash; avg per workspace (recipients vs control)</div>
+            ${timelineSVG}
+            <div style="display:flex;gap:20px;margin-top:8px;font-size:12px;">
+                <span style="color:var(--brand);">&#9135;&#9135; Recipients</span>
+                <span style="color:#94a3b8;">&#9135;&#9135; Control</span>
+                <span style="color:#fbbf24;">&#9476; Send date</span>
+            </div>
+        </div>
+    </div>`;
+}
+
+function renderFullCampaignReport(c, history, type, impactData = null) {
     const catH        = history.filter(h => h.category === c.category);
     const catAvgOpen  = avgMetric(catH, 'open_rate');
     const catAvgClick = avgMetric(catH, 'click_rate');
@@ -3789,6 +3990,7 @@ function renderSingleCampaignReport(c, history, type) {
     const p = v => v != null ? (v*100).toFixed(1)+'%' : '—';
 
     // Store data for on-demand narrative generation
+    window._impactData = impactData;
     window._narrativeData = {
         isSingleCampaign: true,
         campaignName: c.campaign_name,
@@ -3804,6 +4006,7 @@ function renderSingleCampaignReport(c, history, type) {
         notes:        c.notes,
         catAvgOpen, catAvgClick, catAvgCTOR,
         histAvgOpen, histAvgClick, histAvgCTOR,
+        featureImpact: impactData ? buildImpactNarrativeData(impactData) : null,
     };
 
     const kpiHTML = `<div class="report-kpis">
@@ -3889,6 +4092,11 @@ function renderSingleCampaignReport(c, history, type) {
     window._reportSlackText = slackLines;
     window._reportFullText  = txtReport;
 
+    const impactHTML = impactData ? buildImpactSection(impactData) : '';
+    const narrativePlaceholder = impactData
+        ? `Optional: add any extra context — the AI narrative will already include the feature impact data above.`
+        : `Optional: paste product &amp; usage insights to include — e.g. 'Feature X adoption +12% for this cohort, DAU up 8% WoW.'`;
+
     document.getElementById('report-out').innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
             <div>
@@ -3901,15 +4109,16 @@ function renderSingleCampaignReport(c, history, type) {
             </div>
         </div>
         <div class="report-section" id="report-narrative-section">
-            <h3>Executive Narrative</h3>
+            <h3>✨ AI Narrative</h3>
             <div id="report-narrative">
-                <textarea id="r-product-insights" rows="3" style="resize:vertical;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:8px 10px;font-family:inherit;margin-bottom:10px;" placeholder="Optional: paste product &amp; usage insights to include — e.g. 'Feature X adoption +12% for this cohort, DAU up 8% WoW, 90-day retention improved 5pp.'"></textarea>
-                <button id="narrative-gen-btn" class="btn btn-primary" style="font-size:13px;" onclick="generateNarrative()">✨ Generate AI Narrative</button>
+                <textarea id="r-product-insights" rows="2" style="resize:vertical;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:8px 10px;font-family:inherit;margin-bottom:10px;" placeholder="${narrativePlaceholder}"></textarea>
+                <button id="narrative-gen-btn" class="btn btn-primary" style="font-size:13px;" onclick="generateNarrative()">Generate AI Narrative</button>
             </div>
         </div>
         ${kpiHTML}
         ${detailsHTML}
         ${benchHTML}
+        ${impactHTML}
         <div class="report-section"><h3>Slack snippet</h3><div class="slack-box">${slackLines.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>').replace(/\*(.*?)\*/g,'<strong>$1</strong>').replace(/_(.*?)_/g,'<em>$1</em>')}</div></div>
     `;
     document.getElementById('report-out').style.display = 'block';
@@ -3995,6 +4204,130 @@ function copySlackSnippet() {
     navigator.clipboard.writeText(window._reportSlackText || '');
     const btn = event.target; btn.textContent = 'Copied!';
     setTimeout(() => btn.textContent = 'Copy Slack snippet', 2000);
+}
+
+// ── CAMPAIGN IMPACT — metric combobox ─────────────────────────────────────────
+let _ciMetrics = {};   // key → label
+let _ciGroups  = [];   // [{label, keys}]
+
+// Load metric list from API on first open
+async function ensureCIMetrics() {
+    if (Object.keys(_ciMetrics).length) return;
+    try {
+        const r = await fetch('/api/campaign-impact');
+        const d = await r.json();
+        _ciMetrics = d.metrics || {};
+        _ciGroups  = d.groups  || [];
+    } catch (e) { /* offline — will fall back to empty */ }
+}
+
+function openCIDropdown() {
+    ensureCIMetrics().then(() => filterCIMetrics(document.getElementById('ci-metric-search').value));
+}
+
+function closeCIDropdown() {
+    document.getElementById('ci-metric-dropdown').style.display = 'none';
+}
+
+function filterCIMetrics(q) {
+    const dd  = document.getElementById('ci-metric-dropdown');
+    const lq  = q.toLowerCase();
+    let html  = '';
+    let total = 0;
+
+    const groups = _ciGroups.length ? _ciGroups : [{ label: 'All Metrics', keys: Object.keys(_ciMetrics) }];
+
+    for (const grp of groups) {
+        const matches = grp.keys.filter(k => {
+            const label = (_ciMetrics[k] || '').toLowerCase();
+            return !lq || label.includes(lq) || k.toLowerCase().includes(lq);
+        });
+        if (!matches.length) continue;
+        html += `<div style="padding:6px 10px 2px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748b;">${grp.label}</div>`;
+        for (const k of matches) {
+            const label = _ciMetrics[k] || k;
+            const hl    = lq ? label.replace(new RegExp(`(${lq.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<mark style="background:#3b4a6b;color:#e2e8f0;border-radius:2px;">$1</mark>') : label;
+            html += `<div class="ci-metric-opt" data-key="${k}" onmousedown="selectCIMetric('${k}','${label.replace(/'/g,"\\'")}')"`
+                  + ` style="padding:7px 12px;font-size:13px;cursor:pointer;color:#cbd5e1;">${hl}</div>`;
+            total++;
+        }
+    }
+
+    if (!total) html = '<div style="padding:10px 12px;font-size:12px;color:#64748b;">No metrics match</div>';
+
+    dd.innerHTML = html;
+    dd.style.display = '';
+
+    // Hover highlight
+    dd.querySelectorAll('.ci-metric-opt').forEach(el => {
+        el.addEventListener('mouseover', () => el.style.background = '#334155');
+        el.addEventListener('mouseout',  () => el.style.background = '');
+    });
+}
+
+function selectCIMetric(key, label) {
+    document.getElementById('ci-metric').value        = key;
+    document.getElementById('ci-metric-search').value = label;
+    closeCIDropdown();
+}
+
+// Pre-populate search box with the default hidden value label on page load
+function buildCITimelineSVG(timeline, sendDate) {
+    const W = 700, H = 200, mL = 42, mR = 12, mT = 12, mB = 40;
+    const cW = W - mL - mR, cH = H - mT - mB;
+    const n  = timeline.length;
+    const xScale = i => mL + (i / (n - 1)) * cW;
+
+    const allVals = timeline.flatMap(d => [d.recipientAvg, d.controlAvg]).filter(v => v != null);
+    if (!allVals.length) return '<p style="color:var(--muted);">No data</p>';
+    const maxVal = Math.max(...allVals) * 1.2 || 1;
+    const yScale = v => mT + cH - (v / maxVal) * cH;
+
+    // Send date index
+    const sendIdx = timeline.findIndex(d => d.date >= sendDate);
+
+    let recPts = '', ctrlPts = '';
+    timeline.forEach((d, i) => {
+        const x = xScale(i).toFixed(1);
+        if (d.recipientAvg != null) recPts  += `${x},${yScale(d.recipientAvg).toFixed(1)} `;
+        if (d.controlAvg   != null) ctrlPts += `${x},${yScale(d.controlAvg).toFixed(1)} `;
+    });
+
+    // Y axis labels
+    let yAxis = '';
+    const yStep = maxVal / 4;
+    for (let t = 0; t <= maxVal * 1.05; t += yStep) {
+        const y = yScale(t);
+        yAxis += `<line x1="${mL}" y1="${y.toFixed(1)}" x2="${mL+cW}" y2="${y.toFixed(1)}" stroke="#1e293b" stroke-width="1"/>`;
+        yAxis += `<text x="${mL-5}" y="${(y+3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="#64748b">${t.toFixed(1)}</text>`;
+    }
+
+    // X axis: show first, send date, last
+    let xAxis = '';
+    const xLabels = [[0, timeline[0]?.date], [sendIdx >= 0 ? sendIdx : Math.floor(n/2), 'Send'], [n-1, timeline[n-1]?.date]];
+    xLabels.forEach(([i, label]) => {
+        if (i < 0 || i >= n) return;
+        const x = xScale(i);
+        xAxis += `<line x1="${x.toFixed(1)}" y1="${(mT+cH).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(mT+cH+4).toFixed(1)}" stroke="#334155"/>`;
+        xAxis += `<text x="${x.toFixed(1)}" y="${(mT+cH+14).toFixed(1)}" text-anchor="middle" font-size="9" fill="#64748b">${label}</text>`;
+    });
+
+    // Send date vertical line
+    let sendLine = '';
+    if (sendIdx >= 0) {
+        const sx = xScale(sendIdx);
+        sendLine = `<line x1="${sx.toFixed(1)}" y1="${mT}" x2="${sx.toFixed(1)}" y2="${(mT+cH).toFixed(1)}" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+    }
+
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;">
+        ${yAxis}
+        <line x1="${mL}" y1="${mT}" x2="${mL}" y2="${mT+cH}" stroke="#334155"/>
+        <line x1="${mL}" y1="${mT+cH}" x2="${mL+cW}" y2="${mT+cH}" stroke="#334155"/>
+        ${xAxis}
+        ${sendLine}
+        ${recPts  ? `<polyline points="${recPts.trim()}"  fill="none" stroke="#818cf8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+        ${ctrlPts ? `<polyline points="${ctrlPts.trim()}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5,3"/>` : ''}
+    </svg>`;
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────

@@ -22,9 +22,29 @@ module.exports = async function (req, res) {
       subjectLine, audience, notes,
       catAvgOpen, catAvgClick, catAvgCTOR,
       histAvgOpen, histAvgClick,
+      featureImpact,
     } = reportData;
 
-    prompt = `You are a lifecycle marketing analyst writing a focused campaign post-mortem for a VP of Growth at a B2B SaaS company (Intercom). Write a concise 3-paragraph narrative based on the data below. Be specific with numbers. Use a confident, direct, professional tone. Do not use bullet points or headers — flowing prose only. Do not start with "This campaign" or "In this campaign".
+    const n = v => v != null ? Number(v).toFixed(2) : '—';
+    const impactSection = featureImpact ? `
+Feature Impact — ${featureImpact.featureLabel} (${featureImpact.matchedWorkspaces || '?'} matched workspaces):
+- Recipients: avg ${n(featureImpact.recipientBefore)} before → ${n(featureImpact.recipientAfter)} after (change: ${featureImpact.recipientLift >= 0 ? '+' : ''}${n(featureImpact.recipientLift)})
+- Control group: avg ${n(featureImpact.controlBefore)} before → ${n(featureImpact.controlAfter)} after (change: ${featureImpact.controlLift >= 0 ? '+' : ''}${n(featureImpact.controlLift)})
+- Net campaign lift (recipient change minus control change): ${featureImpact.campaignLift >= 0 ? '+' : ''}${n(featureImpact.campaignLift)} per workspace
+- Recipients with feature active post-campaign: ${featureImpact.recipientPctActive != null ? featureImpact.recipientPctActive.toFixed(1) + '%' : '—'} vs control ${featureImpact.controlPctActive != null ? featureImpact.controlPctActive.toFixed(1) + '%' : '—'}` : '';
+
+    const paragraphs = featureImpact
+      ? `Write exactly four paragraphs:
+1. Email performance — how this campaign performed vs category and all-time benchmarks, what the engagement numbers mean
+2. Feature impact — what the Snowflake data shows: did recipients adopt the feature more than the control group? Cite the lift number directly and be honest if the lift is small or negative
+3. What drove results — subject line, audience, timing, or content factors that likely explain both the email engagement and any feature adoption observed
+4. Learnings & recommendation — one clear, data-backed takeaway for the team${reportData.productInsights ? ', incorporating the additional context above' : ''}`
+      : `Write exactly three paragraphs:
+1. Performance summary — how this campaign performed vs category and all-time benchmarks, what the numbers mean
+2. What drove results — subject line, audience, timing, content or any other factors that likely explain the performance
+3. Learnings & recommendation — one clear, data-backed takeaway for the team${reportData.productInsights ? ', incorporating the product usage insights above' : ''}`;
+
+    prompt = `You are a lifecycle marketing analyst writing a focused campaign post-mortem for a VP of Growth at a B2B SaaS company (Intercom). Write a concise narrative based on the data below. Be specific with numbers. Use a confident, direct, professional tone. Do not use bullet points or headers — flowing prose only. Do not start with "This campaign" or "In this campaign".
 
 Campaign: ${campaignName}
 Category: ${category || '—'}
@@ -33,17 +53,14 @@ Emails Sent: ${emailsSent ? Number(emailsSent).toLocaleString() : '—'}
 Subject Line: ${subjectLine || '—'}
 Audience: ${audience || '—'}
 
-Performance:
+Email Performance:
 - Open Rate: ${fmt(openRate)}${delta(openRate, catAvgOpen ? catAvgOpen : histAvgOpen)} (${category} category avg: ${fmt(catAvgOpen)}, all-time avg: ${fmt(histAvgOpen)})
 - Click Rate: ${fmt(clickRate)}${delta(clickRate, catAvgClick)} (${category} category avg: ${fmt(catAvgClick)})
 - CTOR: ${fmt(ctor)} (${category} category avg: ${fmt(catAvgCTOR)})
 - Unsub Rate: ${fmt(unsubRate)}
-${notes ? `\nCampaign notes: ${notes}` : ''}${productSection}
+${notes ? `\nCampaign notes: ${notes}` : ''}${impactSection}${productSection}
 
-Write exactly three paragraphs:
-1. Performance summary — how this campaign performed vs category and all-time benchmarks, what the numbers mean
-2. What drove results — subject line, audience, timing, content or any other factors that likely explain the performance
-3. Learnings & recommendation — one clear, data-backed takeaway for the team${reportData.productInsights ? ', incorporating the product usage insights above' : ''}`;
+${paragraphs}`;
 
   } else {
     const {
@@ -104,7 +121,7 @@ Write exactly three paragraphs:
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 800,
+        max_tokens: 1000,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
