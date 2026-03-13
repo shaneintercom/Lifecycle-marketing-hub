@@ -3890,6 +3890,23 @@ async function generateReport() {
 }
 
 function buildImpactNarrativeData(d) {
+    if (d.actionMode) {
+        // Action mode: express activation rates as decimals so the narrative formatter works
+        const r = d.recipient || {}, c = d.control || {};
+        return {
+            featureLabel:       d.featureLabel,
+            matchedWorkspaces:  d.campaign?.matchedWorkspaces,
+            recipientBefore:    (r.activationRateBefore || 0) / 100,
+            recipientAfter:     (r.activationRateAfter  || 0) / 100,
+            recipientLift:      ((r.activationRateAfter || 0) - (r.activationRateBefore || 0)) / 100,
+            controlBefore:      (c.activationRateBefore || 0) / 100,
+            controlAfter:       (c.activationRateAfter  || 0) / 100,
+            controlLift:        ((c.activationRateAfter || 0) - (c.activationRateBefore || 0)) / 100,
+            campaignLift:       (d.lift || 0) / 100,
+            recipientPctActive: r.activationRateAfter,
+            controlPctActive:   c.activationRateAfter,
+        };
+    }
     const sum = d.summary || [];
     const get = (cohort, period) => sum.find(r => r.cohort === cohort && r.period === period) || {};
     const rAfter  = get('recipient', 'after');
@@ -3914,7 +3931,9 @@ function buildImpactNarrativeData(d) {
 }
 
 function buildImpactSection(d) {
-    if (!d || !d.summary) return '';
+    if (!d) return '';
+    if (d.actionMode) return buildActionImpactSection(d);
+    if (!d.summary) return '';
     const nd   = buildImpactNarrativeData(d);
     const fmt4 = v => v != null ? Number(v).toFixed(2) : '—';
     const pct  = v => v != null ? Number(v).toFixed(1) + '%' : '—';
@@ -4325,6 +4344,117 @@ function buildCITimelineSVG(timeline, sendDate) {
         <line x1="${mL}" y1="${mT+cH}" x2="${mL+cW}" y2="${mT+cH}" stroke="#334155"/>
         ${xAxis}
         ${sendLine}
+        ${recPts  ? `<polyline points="${recPts.trim()}"  fill="none" stroke="#818cf8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+        ${ctrlPts ? `<polyline points="${ctrlPts.trim()}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5,3"/>` : ''}
+    </svg>`;
+}
+
+// ── Product Action Impact (workspace activation rate mode) ────────────────────
+function buildActionImpactSection(d) {
+    const r = d.recipient || {}, c = d.control || {};
+    const lift = d.lift || 0;
+    const liftColor = lift > 0 ? '#4ade80' : lift < 0 ? '#f87171' : 'var(--muted)';
+    const pct  = v => v != null ? Number(v).toFixed(1) + '%' : '—';
+    const sign = v => v > 0 ? '+' : '';
+
+    const rows = [
+        { label: 'Recipients', cohortData: r },
+        { label: 'Control',    cohortData: c },
+    ].map(({ label, cohortData: cd }) => {
+        const change = (cd.activationRateAfter || 0) - (cd.activationRateBefore || 0);
+        return `<tr>
+            <td style="font-weight:600;">${label} <span style="font-weight:400;color:var(--muted);font-size:11px;">(${(cd.totalWorkspaces || 0).toLocaleString()} workspaces)</span></td>
+            <td>${pct(cd.activationRateBefore)} <span style="font-size:11px;color:var(--muted);">(${(cd.activatedBefore || 0)} wks)</span></td>
+            <td>${pct(cd.activationRateAfter)} <span style="font-size:11px;color:var(--muted);">(${(cd.activatedAfter || 0)} wks)</span></td>
+            <td style="color:${change > 0 ? '#4ade80' : change < 0 ? '#f87171' : 'inherit'};font-weight:600;">${sign(change)}${Number(change).toFixed(1)}pp</td>
+        </tr>`;
+    }).join('');
+
+    const timelineSVG = d.timeline?.length ? buildActionTimelineSVG(d.timeline) : '';
+
+    return `<div class="report-section">
+        <h3>Product Action Impact &mdash; ${d.featureLabel.replace(' ↗', '')}</h3>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+            Did recipients perform this admin action within 30 days of receiving the campaign?
+            &middot; ${(d.campaign?.matchedWorkspaces || 0).toLocaleString()} recipient workspaces matched
+            &middot; workspace match rate ${d.campaign?.matchRate || 0}%
+            ${d.actionNote ? `<br><span style="color:#f59e0b;">⚠ ${d.actionNote}</span>` : ''}
+        </p>
+        <div style="display:grid;grid-template-columns:180px 1fr;gap:16px;margin-bottom:16px;align-items:start;">
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;text-align:center;padding:24px 12px;">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;">Campaign Lift</div>
+                <div style="font-size:36px;font-weight:800;line-height:1;color:${liftColor};">${sign(lift)}${Number(lift).toFixed(1)}<span style="font-size:18px;">pp</span></div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">recipients vs control</div>
+                <div style="font-size:12px;margin-top:12px;line-height:1.6;">
+                    <span style="color:#818cf8;font-weight:600;">${pct(r.activationRateAfter)}</span> of recipients<br>
+                    <span style="font-size:11px;color:var(--muted);">vs ${pct(c.activationRateAfter)} of control</span>
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-top:8px;">
+                    ${(r.activatedAfter || 0)} of ${(r.totalWorkspaces || 0)} workspaces
+                </div>
+            </div>
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead><tr>
+                        <th>Cohort</th>
+                        <th>Baseline rate <span style="font-weight:400;">(−30d)</span></th>
+                        <th>Post-campaign rate <span style="font-weight:400;">(+30d)</span></th>
+                        <th>Change</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>
+        ${timelineSVG ? `<div style="margin-top:16px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px;">Daily new activations — % of each cohort performing action (post-campaign)</div>
+            ${timelineSVG}
+            <div style="display:flex;gap:20px;margin-top:8px;font-size:12px;">
+                <span style="color:var(--brand);">&#9135;&#9135; Recipients</span>
+                <span style="color:#94a3b8;">&#9135;&#9135; Control</span>
+            </div>
+        </div>` : ''}
+    </div>`;
+}
+
+function buildActionTimelineSVG(timeline) {
+    const W = 700, H = 160, mL = 42, mR = 12, mT = 12, mB = 30;
+    const cW = W - mL - mR, cH = H - mT - mB;
+    const n  = timeline.length;
+    if (!n) return '';
+    const xScale = i => mL + (i / Math.max(n - 1, 1)) * cW;
+
+    const allVals = timeline.flatMap(d => [d.recipientPct, d.controlPct]).filter(v => v != null && v > 0);
+    if (!allVals.length) return '<p style="color:var(--muted);font-size:12px;">No daily activations in this window</p>';
+    const maxVal = Math.max(...allVals) * 1.3 || 1;
+    const yScale = v => mT + cH - (v / maxVal) * cH;
+
+    let recPts = '', ctrlPts = '';
+    timeline.forEach((d, i) => {
+        const x = xScale(i).toFixed(1);
+        if (d.recipientPct > 0) recPts  += `${x},${yScale(d.recipientPct).toFixed(1)} `;
+        if (d.controlPct   > 0) ctrlPts += `${x},${yScale(d.controlPct).toFixed(1)} `;
+    });
+
+    let yAxis = '';
+    const yStep = maxVal / 3;
+    for (let t = 0; t <= maxVal; t += yStep) {
+        const y = yScale(t);
+        yAxis += `<line x1="${mL}" y1="${y.toFixed(1)}" x2="${mL+cW}" y2="${y.toFixed(1)}" stroke="#1e293b" stroke-width="1"/>`;
+        yAxis += `<text x="${mL-5}" y="${(y+3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="#64748b">${t.toFixed(1)}%</text>`;
+    }
+
+    let xAxis = '';
+    [[0, timeline[0]?.date], [n-1, timeline[n-1]?.date]].forEach(([i, label]) => {
+        if (i < 0 || i >= n || !label) return;
+        const x = xScale(i);
+        xAxis += `<text x="${x.toFixed(1)}" y="${(mT+cH+14).toFixed(1)}" text-anchor="middle" font-size="9" fill="#64748b">${label}</text>`;
+    });
+
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;">
+        ${yAxis}
+        <line x1="${mL}" y1="${mT}" x2="${mL}" y2="${mT+cH}" stroke="#334155"/>
+        <line x1="${mL}" y1="${mT+cH}" x2="${mL+cW}" y2="${mT+cH}" stroke="#334155"/>
+        ${xAxis}
         ${recPts  ? `<polyline points="${recPts.trim()}"  fill="none" stroke="#818cf8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
         ${ctrlPts ? `<polyline points="${ctrlPts.trim()}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5,3"/>` : ''}
     </svg>`;

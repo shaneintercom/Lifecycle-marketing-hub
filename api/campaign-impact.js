@@ -720,6 +720,38 @@ const METRIC_GROUPS = GROUP_ORDER
     keys: _groupMap[g].sort((a, b) => METRICS[a].label.localeCompare(METRICS[b].label)),
   }));
 
+// ─── Product Actions (workspace-level admin activation tracking) ──────────────
+// Key prefix 'ACTION:' distinguishes these from daily-aggregate METRICS.
+// Instead of comparing avg metric values, the tool measures:
+//   % of workspaces that PERFORMED this admin action in 30 days post-campaign
+//   vs a control group of non-recipient paid workspaces.
+const PRODUCT_ACTIONS = {
+  'ACTION:FIN_GUIDANCE_CREATED': {
+    label: 'Fin guidance — workspace created new guidance ↗',
+    table: 'CORE_PRODUCT.FCT_CONVERSATION_APPLIED_FIN_GUIDANCE',
+    dateCol: 'FIN_GUIDANCE_CREATED_AT',
+    note: 'Only counts guidance that was eventually applied to at least one Fin conversation.',
+  },
+  'ACTION:FIN_GUIDANCE_LIVE': {
+    label: 'Fin guidance — workspace has live guidance active ↗',
+    table: 'CORE_PRODUCT.FCT_CONVERSATION_APPLIED_FIN_GUIDANCE',
+    dateCol: 'FIN_GUIDANCE_CREATED_AT',
+    filter: "FIN_GUIDANCE_STATE_NAME = 'live'",
+    note: 'Workspace created guidance (currently live) in the 30-day post-campaign window.',
+  },
+  'ACTION:FIN_PROCEDURE_CREATED': {
+    label: 'Fin procedures — workspace created a new procedure ↗',
+    table: 'CORE_PRODUCT.DIM_PROCEDURES',
+    dateCol: 'PROCEDURE_CREATED_AT',
+  },
+  'ACTION:FIN_PROCEDURE_SET_LIVE': {
+    label: 'Fin procedures — workspace first set a procedure live ↗',
+    table: 'CORE_PRODUCT.DIM_PROCEDURES',
+    dateCol: 'PROCEDURE_FIRST_SET_LIVE_AT',
+    note: 'Tracks the first time each procedure was set live. Repeat publishes not counted.',
+  },
+};
+
 function generateJWT() {
   const pk = (process.env.SNOWFLAKE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
   if (!pk) throw new Error('SNOWFLAKE_PRIVATE_KEY not configured');
@@ -812,9 +844,14 @@ function parseRows(body) {
 module.exports = async function (req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  // Return available metrics list
+  // Return available metrics + product actions list
   if (req.method === 'GET') {
-    return res.status(200).json({ metrics: METRIC_LABELS, groups: METRIC_GROUPS });
+    const actionLabels = Object.fromEntries(Object.entries(PRODUCT_ACTIONS).map(([k, v]) => [k, v.label]));
+    const actionGroup  = { label: 'Product Actions (Admin)', keys: Object.keys(PRODUCT_ACTIONS) };
+    return res.status(200).json({
+      metrics: { ...METRIC_LABELS, ...actionLabels },
+      groups:  [...METRIC_GROUPS, actionGroup],
+    });
   }
 
   if (req.method !== 'POST') return res.status(405).end();
@@ -824,7 +861,7 @@ module.exports = async function (req, res) {
   if (!rulesetId || isNaN(Number(rulesetId))) {
     return res.status(400).json({ error: 'Invalid rulesetId — must be a number.' });
   }
-  if (!featureMetric || !METRICS[featureMetric]) {
+  if (!featureMetric || (!METRICS[featureMetric] && !PRODUCT_ACTIONS[featureMetric])) {
     return res.status(400).json({ error: 'Invalid featureMetric.' });
   }
 
@@ -860,6 +897,149 @@ module.exports = async function (req, res) {
     if (!meta.SEND_DATE || meta.TOTAL_RECIPIENTS === '0') {
       return res.status(404).json({
         error: `No email receipts found for RULESET_ID ${rid}. Check the ID is correct — find it in the Intercom series URL (…/outbound/series/XXXXXXXX).`,
+      });
+    }
+
+    // ── Product Action path: workspace activation rate ─────────────────────
+    if (PRODUCT_ACTIONS[featureMetric]) {
+      const action = PRODUCT_ACTIONS[featureMetric];
+      const filterClause = action.filter ? `AND a.${action.filter}` : '';
+
+      const actionSQL = `
+WITH send_info AS (
+  SELECT DATE(MIN(CREATED_AT)) AS sd
+  FROM INTERCOM_PROD.CORE_PRODUCT.FCT_OUTBOUND_RECEIPTS
+  WHERE APP_ID = 6 AND RULESET_ID = ${rid} AND CONTENT_TYPE = 'email'
+),
+recipients AS (
+  SELECT DISTINCT t.DEFAULT_APP_ID AS app_id
+  FROM INTERCOM_PROD.CORE_PRODUCT.FCT_OUTBOUND_RECEIPTS r
+  JOIN INTERCOM_PROD.CORE_PRODUCT.DIM_TEAMMATES t ON r.USER_ID = t.I4I_USER_ID
+  WHERE r.APP_ID = 6
+    AND r.RULESET_ID = ${rid}
+    AND r.CONTENT_TYPE = 'email'
+    AND t.DEFAULT_APP_ID IS NOT NULL
+  LIMIT 2000
+),
+control_group AS (
+  SELECT a.APP_ID AS app_id
+  FROM INTERCOM_PROD.CORE_COMMON.DIM_APPS a
+  LEFT JOIN recipients r ON a.APP_ID = r.app_id
+  WHERE a.IS_PAID_APP_NOW = true
+    AND a.IS_DELETED_APP = false
+    AND a.INCLUDE_IN_ANALYSIS = true
+    AND r.app_id IS NULL
+  LIMIT 2000
+),
+cohorts AS (
+  SELECT app_id, 'recipient' AS cohort FROM recipients
+  UNION ALL
+  SELECT app_id, 'control'   AS cohort FROM control_group
+),
+action_after AS (
+  SELECT DISTINCT a.APP_ID AS app_id
+  FROM INTERCOM_PROD.${action.table} a
+  CROSS JOIN send_info s
+  WHERE a.${action.dateCol} > s.sd
+    AND a.${action.dateCol} <= DATEADD('day', 30, s.sd)
+    ${filterClause}
+),
+action_before AS (
+  SELECT DISTINCT a.APP_ID AS app_id
+  FROM INTERCOM_PROD.${action.table} a
+  CROSS JOIN send_info s
+  WHERE a.${action.dateCol} >= DATEADD('day', -30, s.sd)
+    AND a.${action.dateCol} < s.sd
+    ${filterClause}
+),
+summary AS (
+  SELECT
+    'S'                                                                         AS tp,
+    c.cohort,
+    COUNT(DISTINCT c.app_id)                                                    AS total_ws,
+    COUNT(DISTINCT CASE WHEN aa.app_id IS NOT NULL THEN c.app_id END)           AS activated_after,
+    COUNT(DISTINCT CASE WHEN ab.app_id IS NOT NULL THEN c.app_id END)           AS activated_before
+  FROM cohorts c
+  LEFT JOIN action_after  aa ON c.app_id = aa.app_id
+  LEFT JOIN action_before ab ON c.app_id = ab.app_id
+  GROUP BY c.cohort
+),
+daily_actions AS (
+  SELECT
+    'T'                                                                         AS tp,
+    c.cohort,
+    DATE(a.${action.dateCol})::TEXT                                              AS dt,
+    COUNT(DISTINCT c.app_id)                                                    AS cnt
+  FROM INTERCOM_PROD.${action.table} a
+  JOIN cohorts c ON a.APP_ID = c.app_id
+  CROSS JOIN send_info s
+  WHERE a.${action.dateCol} > s.sd
+    AND a.${action.dateCol} <= DATEADD('day', 30, s.sd)
+    ${filterClause}
+  GROUP BY c.cohort, DATE(a.${action.dateCol})
+)
+SELECT tp, cohort, total_ws::TEXT, activated_after::TEXT, activated_before::TEXT, NULL::TEXT AS dt, NULL::TEXT AS cnt
+FROM summary
+UNION ALL
+SELECT tp, cohort, NULL::TEXT, NULL::TEXT, NULL::TEXT, dt, cnt::TEXT
+FROM daily_actions
+ORDER BY tp DESC, cohort, dt
+      `;
+
+      const actionRows = await runQuery(actionSQL, jwt);
+      const sumRows = actionRows.filter(r => r.TP === 'S');
+      const dayRows = actionRows.filter(r => r.TP === 'T');
+
+      const buildCohort = (cohort) => {
+        const row    = sumRows.find(r => r.COHORT === cohort) || {};
+        const total  = Number(row.TOTAL_WS || 0);
+        const after  = Number(row.ACTIVATED_AFTER  || 0);
+        const before = Number(row.ACTIVATED_BEFORE || 0);
+        return {
+          cohort,
+          totalWorkspaces:      total,
+          activatedAfter:       after,
+          activatedBefore:      before,
+          activationRateAfter:  total > 0 ? Math.round(after  / total * 1000) / 10 : 0,
+          activationRateBefore: total > 0 ? Math.round(before / total * 1000) / 10 : 0,
+        };
+      };
+
+      const recipient = buildCohort('recipient');
+      const control   = buildCohort('control');
+
+      const dates = [...new Set(dayRows.map(r => r.DT))].sort();
+      const timeline = dates.map(date => {
+        const rRow = dayRows.find(r => r.COHORT === 'recipient' && r.DT === date);
+        const cRow = dayRows.find(r => r.COHORT === 'control'   && r.DT === date);
+        return {
+          date,
+          recipientPct: recipient.totalWorkspaces > 0
+            ? Math.round(Number(rRow?.CNT || 0) / recipient.totalWorkspaces * 1000) / 10 : 0,
+          controlPct: control.totalWorkspaces > 0
+            ? Math.round(Number(cRow?.CNT || 0) / control.totalWorkspaces * 1000) / 10 : 0,
+        };
+      });
+
+      return res.status(200).json({
+        campaign: {
+          rulesetId:         rid,
+          sendDate:          meta.SEND_DATE,
+          totalRecipients:   Number(meta.TOTAL_RECIPIENTS),
+          matchedWorkspaces: recipient.totalWorkspaces,
+          matchRate: meta.TOTAL_RECIPIENTS > 0
+            ? Math.round(recipient.totalWorkspaces / Number(meta.TOTAL_RECIPIENTS) * 100) : 0,
+          openRate:  Number(meta.OPEN_RATE),
+          clickRate: Number(meta.CLICK_RATE),
+        },
+        actionMode:   true,
+        featureMetric,
+        featureLabel: action.label,
+        actionNote:   action.note || null,
+        recipient,
+        control,
+        lift: Math.round((recipient.activationRateAfter - control.activationRateAfter) * 10) / 10,
+        timeline,
       });
     }
 
