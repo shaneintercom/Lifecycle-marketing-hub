@@ -4830,42 +4830,39 @@ function closePUModal() {
 let _srSources = [];      // search results (unique source messages)
 let _srReplies = [];      // replies for selected source
 let _srSourceCtx = '';    // selected source context string
-let _srRecentLoaded = false;
 
 async function loadSRRecentCampaigns() {
-    if (_srRecentLoaded) return;
     const wrap = document.getElementById('sr-recent-list');
     if (!wrap) return;
 
-    // Fetch enough recent campaigns to find 10 shipped ones
+    const today = new Date().toISOString().slice(0, 10);
     const { data } = await db.from('lifecycle_campaigns')
-        .select('campaign_id, campaign_name, subject_line, category, send_date, notes')
+        .select('campaign_id, campaign_name, subject_line, category, send_date')
         .not('send_date', 'is', null)
+        .lte('send_date', today)
         .order('send_date', { ascending: false })
-        .limit(60);
+        .limit(10);
 
-    const shipped = (data || []).filter(c => _isShipped(c)).slice(0, 10);
+    const recent = data || [];
 
-    if (!shipped.length) {
-        wrap.innerHTML = '<div style="font-size:13px;color:var(--muted);">No shipped campaigns found.</div>';
-        _srRecentLoaded = true;
+    if (!recent.length) {
+        wrap.innerHTML = '<div style="font-size:13px;color:var(--muted);">No recent campaigns found.</div>';
         return;
     }
 
-    wrap.innerHTML = shipped.map(c => {
+    wrap.innerHTML = recent.map(c => {
         const cls = (c.category || '').replace(/[\s-]/g, '').replace(/[^a-zA-Z]/g, '') || 'default';
         const name = escHtml(c.campaign_name || '');
         const subj = c.subject_line ? escHtml(c.subject_line) : '';
         const date = c.send_date ? fmtDate(c.send_date) : '';
-        const searchTerm = escHtml(c.subject_line || c.campaign_name || '');
-        return `<button class="sr-recent-chip" onclick="srQuickSearch('${searchTerm.replace(/'/g, "\\'")}', '${escHtml(c.campaign_name || '').replace(/'/g, "\\'")}')">
+        const searchTerm = (c.subject_line || c.campaign_name || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+        const nameEsc = (c.campaign_name || '').replace(/'/g, "\\'");
+        return `<button class="sr-recent-chip" onclick="srQuickSearch('${searchTerm}', '${nameEsc}')">
             <span class="sr-recent-chip-name">${name}</span>
             ${subj ? `<span class="sr-recent-chip-sub" style="font-style:italic;">"${subj}"</span>` : ''}
             <span class="sr-recent-chip-sub"><span class="shipped-pill cal-event-${cls}" style="font-size:9px;padding:1px 5px;vertical-align:middle;">${escHtml(c.category || '')}</span> ${date}</span>
         </button>`;
     }).join('');
-
-    _srRecentLoaded = true;
 }
 
 async function srQuickSearch(query, label) {
