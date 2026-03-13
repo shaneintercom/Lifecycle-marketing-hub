@@ -156,6 +156,16 @@
         .shipped-meta { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .shipped-copy-btn { font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
         .shipped-copy-btn:hover { color: var(--text); border-color: var(--text); }
+
+        /* ── SERIES REPLIES ── */
+        .sr-recent-chip { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 9px; cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s; max-width: 260px; min-width: 160px; }
+        .sr-recent-chip:hover { border-color: var(--brand); background: rgba(99,102,241,0.06); }
+        .sr-recent-chip-name { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sr-recent-chip-sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sr-prompt-chip { font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+        .sr-prompt-chip:hover { border-color: var(--brand); color: var(--brand); background: rgba(99,102,241,0.06); }
+        .sr-prompt-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
         .cal-layout { display: flex; gap: 24px; align-items: flex-start; }
         .cal-main { flex: 1; min-width: 0; }
         .cal-legend { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; padding-top: 4px; position: sticky; top: 16px; align-self: flex-start; }
@@ -875,11 +885,22 @@
 
     <!-- SERIES REPLIES -->
     <div id="tab-seriesreplies" class="tab-content">
-        <h2>Series Replies</h2>
-        <p style="color:var(--muted);font-size:13px;margin-bottom:20px;">Search for an automated email by subject line, then explore customer replies and ask Claude about themes, sentiment, or concerns.</p>
+        <div style="margin-bottom:20px;">
+            <h2 style="margin-bottom:4px;">Series Replies</h2>
+            <p style="color:var(--muted);font-size:13px;margin:0;">Explore customer replies to your campaigns and ask Claude about themes, sentiment, or concerns.</p>
+        </div>
 
-        <!-- Search bar -->
-        <div class="card" style="padding:16px;">
+        <!-- Recent sends -->
+        <div id="sr-recent-wrap" style="margin-bottom:24px;">
+            <div class="dash-section-label" style="margin-bottom:10px;">Recent sends — click to explore replies</div>
+            <div id="sr-recent-list" style="display:flex;flex-wrap:wrap;gap:8px;">
+                <div style="font-size:13px;color:var(--muted);">Loading recent campaigns…</div>
+            </div>
+        </div>
+
+        <!-- Search (secondary) -->
+        <div class="dash-section-label" style="margin-bottom:10px;">Or search by subject / sender</div>
+        <div class="card" style="padding:16px;margin-bottom:20px;">
             <div style="display:flex;gap:10px;align-items:center;">
                 <input id="sr-query" type="text" placeholder="Search by subject or sender name…" style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;outline:none;" onkeydown="if(event.key==='Enter') searchSeries()" />
                 <select id="sr-recency" style="padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;outline:none;cursor:pointer;">
@@ -902,12 +923,12 @@
 
         <!-- Replies panel -->
         <div id="sr-replies-panel" style="display:none;">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
                 <div>
-                    <div id="sr-selected-subject" style="font-size:14px;font-weight:700;"></div>
-                    <div id="sr-selected-meta" style="font-size:12px;color:var(--muted);margin-top:2px;"></div>
+                    <div id="sr-selected-subject" style="font-size:15px;font-weight:700;"></div>
+                    <div id="sr-selected-meta" style="font-size:12px;color:var(--muted);margin-top:3px;"></div>
                 </div>
-                <button class="btn" style="font-size:12px;" onclick="closeSRPanel()">← Back to results</button>
+                <button class="btn" style="font-size:12px;" onclick="closeSRPanel()">← Back</button>
             </div>
 
             <!-- Replies list -->
@@ -924,9 +945,16 @@
 
             <!-- Claude analysis -->
             <div class="card">
-                <div style="font-size:13px;font-weight:700;margin-bottom:10px;">✨ Ask Claude about these replies</div>
+                <div style="font-size:13px;font-weight:700;margin-bottom:10px;">Ask Claude about these replies</div>
+                <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;">
+                    <button class="sr-prompt-chip" onclick="setSRPrompt(this)">What are the main themes?</button>
+                    <button class="sr-prompt-chip" onclick="setSRPrompt(this)">Any concerning replies to flag?</button>
+                    <button class="sr-prompt-chip" onclick="setSRPrompt(this)">What's the overall sentiment?</button>
+                    <button class="sr-prompt-chip" onclick="setSRPrompt(this)">What are customers asking for?</button>
+                    <button class="sr-prompt-chip" onclick="setSRPrompt(this)">Summarise in 3 bullet points</button>
+                </div>
                 <div class="field" style="margin-bottom:10px;">
-                    <textarea id="sr-question" rows="2" style="resize:vertical;" placeholder="e.g. What are the main themes? Any concerning replies? What are customers asking for?"></textarea>
+                    <textarea id="sr-question" rows="2" style="resize:vertical;" placeholder="Or type a custom question…"></textarea>
                 </div>
                 <button class="btn btn-primary" onclick="analyseSeriesReplies()" id="sr-analyse-btn" style="font-size:13px;">Analyse Replies</button>
                 <div id="sr-analysis-out" style="margin-top:16px;display:none;"></div>
@@ -1184,6 +1212,7 @@ document.querySelectorAll('nav button').forEach(btn => {
         if (btn.dataset.tab === 'abtests')   loadABTests();
         if (btn.dataset.tab === 'reports')        loadCampaignsForReport();
         if (btn.dataset.tab === 'productupdates') loadProductUpdates();
+        if (btn.dataset.tab === 'seriesreplies')  loadSRRecentCampaigns();
         if (btn.dataset.tab === 'activation')     loadActivation();
     });
 });
@@ -4801,6 +4830,68 @@ function closePUModal() {
 let _srSources = [];      // search results (unique source messages)
 let _srReplies = [];      // replies for selected source
 let _srSourceCtx = '';    // selected source context string
+let _srRecentLoaded = false;
+
+async function loadSRRecentCampaigns() {
+    if (_srRecentLoaded) return;
+    const wrap = document.getElementById('sr-recent-list');
+    if (!wrap) return;
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 14);
+    const { data } = await db.from('lifecycle_campaigns')
+        .select('campaign_id, campaign_name, subject_line, category, send_date, notes')
+        .gte('send_date', cutoff.toISOString().slice(0, 10))
+        .not('send_date', 'is', null)
+        .order('send_date', { ascending: false })
+        .limit(20);
+
+    const shipped = (data || []).filter(c => _isShipped(c)).slice(0, 10);
+
+    if (!shipped.length) {
+        wrap.innerHTML = '<div style="font-size:13px;color:var(--muted);">No shipped campaigns in the last 14 days.</div>';
+        _srRecentLoaded = true;
+        return;
+    }
+
+    wrap.innerHTML = shipped.map(c => {
+        const cls = (c.category || '').replace(/[\s-]/g, '').replace(/[^a-zA-Z]/g, '') || 'default';
+        const name = escHtml(c.campaign_name || '');
+        const subj = c.subject_line ? escHtml(c.subject_line) : '';
+        const date = c.send_date ? fmtDate(c.send_date) : '';
+        const searchTerm = escHtml(c.subject_line || c.campaign_name || '');
+        return `<button class="sr-recent-chip" onclick="srQuickSearch('${searchTerm.replace(/'/g, "\\'")}', '${escHtml(c.campaign_name || '').replace(/'/g, "\\'")}')">
+            <span class="sr-recent-chip-name">${name}</span>
+            ${subj ? `<span class="sr-recent-chip-sub" style="font-style:italic;">"${subj}"</span>` : ''}
+            <span class="sr-recent-chip-sub"><span class="shipped-pill cal-event-${cls}" style="font-size:9px;padding:1px 5px;vertical-align:middle;">${escHtml(c.category || '')}</span> ${date}</span>
+        </button>`;
+    }).join('');
+
+    _srRecentLoaded = true;
+}
+
+async function srQuickSearch(query, label) {
+    // Highlight the clicked chip
+    document.querySelectorAll('.sr-recent-chip').forEach(b => b.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+
+    document.getElementById('sr-query').value = query;
+    document.getElementById('sr-recency').value = '30';
+    document.getElementById('sr-search-status').textContent = `Searching for "${label}"…`;
+    document.getElementById('sr-sources').style.display = 'none';
+    document.getElementById('sr-replies-panel').style.display = 'none';
+
+    // Scroll search bar into view
+    document.getElementById('sr-query').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    await searchSeries();
+}
+
+function setSRPrompt(btn) {
+    document.querySelectorAll('.sr-prompt-chip').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('sr-question').value = btn.textContent;
+}
 
 async function searchSeries() {
     const query = document.getElementById('sr-query').value.trim();
