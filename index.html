@@ -148,12 +148,12 @@
         .shipped-range-btn { font-size: 11px; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
         .shipped-range-btn:hover { border-color: var(--primary); color: var(--primary); }
         .shipped-range-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-        .shipped-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+        .shipped-row { display: grid; grid-template-columns: 1fr 105px 52px 90px 58px; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
         .shipped-row:last-child { border-bottom: none; }
         .shipped-row:hover .shipped-name { color: var(--primary); }
-        .shipped-name { font-size: 13px; font-weight: 500; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .shipped-pill { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; display: inline-block; min-width: 95px; text-align: center; }
-        .shipped-meta { font-size: 11px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+        .shipped-name { font-size: 13px; font-weight: 500; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .shipped-pill { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; white-space: nowrap; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+        .shipped-meta { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .shipped-copy-btn { font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
         .shipped-copy-btn:hover { color: var(--text); border-color: var(--text); }
         .cal-layout { display: flex; gap: 24px; align-items: flex-start; }
@@ -1575,9 +1575,9 @@ function _renderShippedList() {
         return `<div class="shipped-row" data-id="${c.campaign_id}">
             <span class="shipped-name" title="${name}">${name}</span>
             <span class="shipped-pill cal-event-${cls}">${c.category || 'Uncategorised'}</span>
-            ${c.channel ? `<span class="shipped-meta">${c.channel}</span>` : ''}
+            <span class="shipped-meta">${c.channel || '—'}</span>
             <span class="shipped-meta">${date}</span>
-            ${owner ? `<span class="shipped-meta">${owner}</span>` : ''}
+            <span class="shipped-meta">${owner || '—'}</span>
         </div>`;
     }).join('');
 
