@@ -4837,19 +4837,17 @@ async function loadSRRecentCampaigns() {
     const wrap = document.getElementById('sr-recent-list');
     if (!wrap) return;
 
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 14);
+    // Fetch enough recent campaigns to find 10 shipped ones
     const { data } = await db.from('lifecycle_campaigns')
         .select('campaign_id, campaign_name, subject_line, category, send_date, notes')
-        .gte('send_date', cutoff.toISOString().slice(0, 10))
         .not('send_date', 'is', null)
         .order('send_date', { ascending: false })
-        .limit(20);
+        .limit(60);
 
     const shipped = (data || []).filter(c => _isShipped(c)).slice(0, 10);
 
     if (!shipped.length) {
-        wrap.innerHTML = '<div style="font-size:13px;color:var(--muted);">No shipped campaigns in the last 14 days.</div>';
+        wrap.innerHTML = '<div style="font-size:13px;color:var(--muted);">No shipped campaigns found.</div>';
         _srRecentLoaded = true;
         return;
     }
