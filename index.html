@@ -148,14 +148,12 @@
         .shipped-range-btn { font-size: 11px; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
         .shipped-range-btn:hover { border-color: var(--primary); color: var(--primary); }
         .shipped-range-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-        .shipped-row { padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+        .shipped-row { display: grid; grid-template-columns: 1fr 140px 80px 72px 64px; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
         .shipped-row:last-child { border-bottom: none; }
         .shipped-row:hover .shipped-name { color: var(--primary); }
-        .shipped-name { font-size: 13px; font-weight: 500; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .shipped-meta-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .shipped-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
         .shipped-pill { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; white-space: nowrap; display: inline-block; }
-        .shipped-meta { font-size: 11px; color: var(--muted); white-space: nowrap; }
-        .shipped-sep { font-size: 11px; color: var(--border); }
+        .shipped-meta { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .shipped-copy-btn { font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
         .shipped-copy-btn:hover { color: var(--text); border-color: var(--text); }
         .cal-layout { display: flex; gap: 24px; align-items: flex-start; }
@@ -1576,12 +1574,10 @@ function _renderShippedList() {
         const owner = c.created_by ? c.created_by.split(',')[0].trim().split(' ')[0] : '';
         return `<div class="shipped-row" data-id="${c.campaign_id}">
             <div class="shipped-name" title="${name}">${name}</div>
-            <div class="shipped-meta-row">
-                <span class="shipped-pill cal-event-${cls}">${c.category || 'Uncategorised'}</span>
-                ${c.channel ? `<span class="shipped-sep">·</span><span class="shipped-meta">${c.channel}</span>` : ''}
-                <span class="shipped-sep">·</span><span class="shipped-meta">${date}</span>
-                ${owner ? `<span class="shipped-sep">·</span><span class="shipped-meta">${owner}</span>` : ''}
-            </div>
+            <span class="shipped-pill cal-event-${cls}">${c.category || 'Uncategorised'}</span>
+            <span class="shipped-meta">${c.channel || '—'}</span>
+            <span class="shipped-meta">${date}</span>
+            <span class="shipped-meta">${owner || '—'}</span>
         </div>`;
     }).join('');
 
