@@ -750,6 +750,48 @@ const PRODUCT_ACTIONS = {
     dateCol: 'PROCEDURE_FIRST_SET_LIVE_AT',
     note: 'Tracks the first time each procedure was set live. Repeat publishes not counted.',
   },
+  // Fin Tasks (from DIM_WORKFLOW_INSTANCES)
+  'ACTION:FIN_TASK_CREATED': {
+    label: 'Fin tasks — workspace created a new Fin task ↗',
+    table: 'CORE_PRODUCT.DIM_WORKFLOW_INSTANCES',
+    dateCol: 'INSTANCE_CREATED_AT',
+    filter: 'IS_FIN_TASK = TRUE',
+  },
+  'ACTION:FIN_TASK_SET_LIVE': {
+    label: 'Fin tasks — workspace first set a Fin task live ↗',
+    table: 'CORE_PRODUCT.DIM_WORKFLOW_INSTANCES',
+    dateCol: 'WORKFLOW_FIRST_SET_LIVE_AT',
+    filter: 'IS_FIN_TASK = TRUE',
+  },
+  'ACTION:FIN_TASK_SOPHISTICATED_TEST': {
+    label: 'Fin tasks — workspace first ran a sophisticated test ↗',
+    table: 'CORE_PRODUCT.DIM_WORKFLOW_INSTANCES',
+    dateCol: 'SOPHISTICATED_TEST_FIRST_RUN_AT',
+    filter: 'IS_FIN_TASK = TRUE',
+    note: 'Sophisticated testing = workspace tested their Fin task before going live.',
+  },
+  // Workflows with Fin (from DIM_WORKFLOW_INSTANCES)
+  'ACTION:WORKFLOW_WITH_FIN_SET_LIVE': {
+    label: 'Workflows — workspace set live a workflow containing a Fin step ↗',
+    table: 'CORE_PRODUCT.DIM_WORKFLOW_INSTANCES',
+    dateCol: 'WORKFLOW_FIRST_SET_LIVE_AT',
+    filter: 'HAD_FIN_ANSWER_STEP_EVER = TRUE AND IS_FIN_TASK = FALSE AND IS_PROCEDURE = FALSE',
+    note: 'Standard workflows (not Fin Tasks or Procedures) that include a Fin answer step.',
+  },
+  'ACTION:WORKFLOW_DATA_CONNECTOR_ADDED': {
+    label: 'Workflows — workspace added a data connector step ↗',
+    table: 'CORE_PRODUCT.DIM_WORKFLOW_INSTANCES',
+    dateCol: 'DATA_CONNECTOR_STEP_FIRST_ADDED_AT',
+    note: 'Tracks when a workspace first added an API/data connector step to any workflow.',
+  },
+  // Fin trial (from FCT_FIN_TRIALS)
+  'ACTION:FIN_TRIAL_STARTED': {
+    label: 'Fin trial — workspace started their first Fin trial ↗',
+    table: 'CORE_PRODUCT.FCT_FIN_TRIALS',
+    dateCol: 'START_DATE',
+    filter: 'IS_FIRST_TRIAL = TRUE',
+    note: 'Only counts the first-ever Fin trial per workspace.',
+  },
 };
 
 function generateJWT() {
