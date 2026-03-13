@@ -792,6 +792,41 @@ const PRODUCT_ACTIONS = {
     filter: 'IS_FIRST_TRIAL = TRUE',
     note: 'Only counts the first-ever Fin trial per workspace.',
   },
+  // Fin first conversation (from FCT_APPS_CMF_RETURNS — app-level activation)
+  'ACTION:FIN_FIRST_CONVERSATION': {
+    label: 'Fin activation — workspace had their very first Fin conversation ↗',
+    table: 'CORE_PRODUCT.FCT_APPS_CMF_RETURNS',
+    dateCol: 'CALENDAR_DATE_FIRST_FIN_OR_LEGACY_RESOLUTION_BOT_CONVERSATION',
+    note: 'Counts workspaces whose first-ever Fin (or legacy Resolution Bot) conversation happened in the 30-day post-campaign window. Strong activation signal.',
+  },
+  // Workflow actions — additional signals from DIM_WORKFLOW_INSTANCES
+  'ACTION:WORKFLOW_FIN_INSTRUCTIONS_ADDED': {
+    label: 'Workflows — workspace added a Fin Instructions step ↗',
+    table: 'CORE_PRODUCT.DIM_WORKFLOW_INSTANCES',
+    dateCol: 'FIN_INSTRUCTIONS_STEP_FIRST_ADDED_AT',
+    note: 'Tracks when a workspace first added a Fin Instructions (knowledge source) step to any workflow.',
+  },
+  'ACTION:FIN_PROCEDURE_AI_GENERATED': {
+    label: 'Fin procedures — workspace created an AI-generated procedure ↗',
+    table: 'CORE_PRODUCT.DIM_WORKFLOW_INSTANCES',
+    dateCol: 'INSTANCE_CREATED_AT',
+    filter: 'IS_AI_GENERATED_PROCEDURE = TRUE',
+    note: 'AI-generated procedures are created by Fin automatically from existing content.',
+  },
+  'ACTION:WORKFLOW_CREATED': {
+    label: 'Workflows — workspace created any new workflow ↗',
+    table: 'CORE_PRODUCT.DIM_WORKFLOW_INSTANCES',
+    dateCol: 'INSTANCE_CREATED_AT',
+    filter: 'IS_FIN_TASK = FALSE AND IS_PROCEDURE = FALSE',
+    note: 'Standard workflows (not Fin Tasks or Procedures). Broad signal for workflow builder engagement.',
+  },
+  'ACTION:WORKFLOW_SET_LIVE': {
+    label: 'Workflows — workspace set any workflow live ↗',
+    table: 'CORE_PRODUCT.DIM_WORKFLOW_INSTANCES',
+    dateCol: 'WORKFLOW_FIRST_SET_LIVE_AT',
+    filter: 'IS_FIN_TASK = FALSE AND IS_PROCEDURE = FALSE',
+    note: 'Standard workflows (not Fin Tasks or Procedures) first set live. Broader activation signal than Fin-specific workflows.',
+  },
 };
 
 function generateJWT() {
