@@ -1999,10 +1999,10 @@ function renderLibrary() {
         };
     }
 
-    // Write aggregated metrics back to parent rows (fire and forget)
+    // Write aggregated metrics back to parent rows only if parent has no direct data
     parents.forEach(c => {
         const kids = childMap[c.campaign_name];
-        if (!kids?.length) return;
+        if (!kids?.length || c.emails_sent) return;
         const agg = calcAgg(kids);
         if (agg) db.from('lifecycle_campaigns').update(agg).eq('campaign_id', c.campaign_id);
     });
@@ -2092,7 +2092,7 @@ function renderLibrary() {
     const rows = [];
     parents.forEach(c => {
         const kids = childMap[c.campaign_name] || [];
-        rows.push(rowHTML(c, kids.length ? calcAgg(kids) : null));
+        rows.push(rowHTML(c, kids.length && !c.emails_sent ? calcAgg(kids) : null));
         kids.forEach(child => rows.push(subRowHTML(child)));
     });
 
