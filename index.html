@@ -5126,10 +5126,17 @@ function renderSRHistory() {
     wrap.style.display = 'block';
     list.innerHTML = history.map(h => {
         const safe = h.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        return `<button class="sr-recent-chip" onclick="srHistoryClick('${safe}', this)" style="width:auto;padding:6px 12px;">
+        return `<button class="sr-recent-chip" onclick="srHistoryClick('${safe}', this)" style="width:auto;padding:6px 12px;display:inline-flex;align-items:center;gap:6px;">
             <span class="sr-recent-chip-name" style="font-size:12px;">${escHtml(h)}</span>
+            <span onclick="event.stopPropagation();srDeleteHistory('${safe}')" style="font-size:11px;color:var(--muted);line-height:1;padding-left:2px;" title="Remove">✕</span>
         </button>`;
     }).join('');
+}
+
+function srDeleteHistory(query) {
+    const history = srGetHistory().filter(h => h !== query);
+    try { localStorage.setItem('sr_search_history', JSON.stringify(history)); } catch (_) {}
+    renderSRHistory();
 }
 
 function srHistoryClick(subject, btn) {
