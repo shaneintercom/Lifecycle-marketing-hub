@@ -4227,6 +4227,31 @@ function renderSingleCampaignReport(c, history, analyticsResult) {
     const p   = v => v != null ? (v * 100).toFixed(1) + '%' : '—';
     let html  = '';
 
+    // Populate _narrativeData so generateNarrative() works for this campaign
+    if (c) {
+        const catH       = history.filter(h => h.category === c.category);
+        window._narrativeData = {
+            isSingleCampaign: true,
+            campaignName: c.campaign_name,
+            category:     c.category,
+            sendDate:     c.send_date,
+            emailsSent:   c.emails_sent,
+            openRate:     c.open_rate,
+            clickRate:    c.click_rate,
+            ctor:         c.click_to_open_rate,
+            unsubRate:    c.unsubscribe_rate,
+            subjectLine:  c.subject_line,
+            audience:     c.audience_segment,
+            notes:        c.notes,
+            catAvgOpen:   avgMetric(catH, 'open_rate'),
+            catAvgClick:  avgMetric(catH, 'click_rate'),
+            catAvgCTOR:   avgMetric(catH, 'click_to_open_rate'),
+            histAvgOpen:  avgMetric(history, 'open_rate'),
+            histAvgClick: avgMetric(history, 'click_rate'),
+            histAvgCTOR:  avgMetric(history, 'click_to_open_rate'),
+        };
+    }
+
     // Email metrics section
     if (c) {
         const catH        = history.filter(h => h.category === c.category);
@@ -4246,6 +4271,17 @@ function renderSingleCampaignReport(c, history, analyticsResult) {
             </div>` : `<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">No email performance data recorded for this campaign. Upload results via CSV in the Campaign Library to see metrics here.</div>`}
             ${[['Audience', c.audience_segment], ['Subject', c.subject_line ? `"${c.subject_line}"` : null], ['Send date', c.send_date ? fmtDate(c.send_date) : null]].filter(([,v]) => v).map(([l,v]) => `<div style="font-size:12px;color:var(--muted);margin-top:8px;"><span style="font-weight:600;color:var(--text);">${l}:</span> ${v}</div>`).join('')}
             ${c.notes ? `<div style="font-size:13px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">${c.notes}</div>` : ''}
+        </div>`;
+    }
+
+    // AI narrative section (only when email metrics are present)
+    if (c && window._narrativeData) {
+        html += `<div class="report-section" style="margin-bottom:20px;">
+            <h3 style="margin-bottom:12px;">✨ AI Narrative</h3>
+            <div id="report-narrative">
+                <textarea id="r-product-insights" rows="2" style="resize:vertical;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:8px 10px;font-family:inherit;margin-bottom:10px;" placeholder="Optional: paste product &amp; usage insights to include in the narrative — e.g. 'Fin resolution rate +5pp for recipients in the 30 days post-send.'"></textarea>
+                <button id="narrative-gen-btn" class="btn btn-primary" style="font-size:13px;" onclick="generateNarrative()">Generate AI Narrative</button>
+            </div>
         </div>`;
     }
 
