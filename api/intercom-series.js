@@ -27,24 +27,34 @@ module.exports = async function (req, res) {
   try {
     // ── SEARCH MODE ──────────────────────────────────────────────────────────
     if (mode === 'search') {
-      if (!query || query.trim().length < 2) {
-        return res.status(400).json({ error: 'Query must be at least 2 characters.' });
+      const { until, exact } = req.body;
+      const hasQuery = query && query.trim().length >= 2;
+      const hasDateRange = since && until;
+
+      if (!hasQuery && !hasDateRange) {
+        return res.status(400).json({ error: 'Provide a query (min 2 chars) or a since+until date range.' });
       }
 
-      const andFilters = [
-        { field: 'source.delivered_as', operator: '=', value: 'automated' },
-        {
-          operator: 'OR',
-          value: [
-            { field: 'source.subject', operator: '~', value: query.trim() },
-            { field: 'source.author.name', operator: '~', value: query.trim() },
-          ],
-        },
-      ];
+      const andFilters = [];
 
-      if (since) {
-        andFilters.push({ field: 'created_at', operator: '>', value: since });
+      if (hasQuery) {
+        // exact=true: only match the precise subject line (used by chip clicks)
+        // exact=false/unset: contains search (used by manual search box)
+        andFilters.push(exact
+          ? { field: 'source.subject', operator: '=', value: query.trim() }
+          : {
+              operator: 'OR',
+              value: [
+                { field: 'source.subject', operator: '~', value: query.trim() },
+                { field: 'source.body',    operator: '~', value: query.trim() },
+                { field: 'source.author.name', operator: '~', value: query.trim() },
+              ],
+            }
+        );
       }
+
+      if (since) andFilters.push({ field: 'created_at', operator: '>', value: since });
+      if (until) andFilters.push({ field: 'created_at', operator: '<', value: until });
 
       const searchBody = {
         query: { operator: 'AND', value: andFilters },
@@ -71,10 +81,12 @@ module.exports = async function (req, res) {
         const sid = src.id;
         if (!sid) continue;
         if (!groups[sid]) {
+          const subject = stripHtml(src.subject || '');
+          const bodySnippet = stripHtml(src.body || '').slice(0, 150);
           groups[sid] = {
             sourceId: sid,
-            subject: stripHtml(src.subject || ''),
-            bodySnippet: stripHtml(src.body || '').slice(0, 150),
+            subject: subject || bodySnippet,
+            bodySnippet,
             senderName: src.author?.name || '',
             senderEmail: src.author?.email || '',
             replyCount: 0,
@@ -159,7 +171,43 @@ module.exports = async function (req, res) {
       return res.status(200).json({ replies, total: allConvs.length });
     }
 
-    return res.status(400).json({ error: 'Invalid mode. Use "search" or "replies".' });
+    // ── RECENT SUBJECTS MODE ─────────────────────────────────────────────────
+    if (mode === 'recentSubjects') {
+      // GET /conversations is a simple indexed list — much faster than search for no-filter queries
+      const r = await fetch('https://api.intercom.io/conversations?per_page=50&sort=created_at&order=desc', {
+        headers: {
+          'Authorization': `Bearer ${TOKEN}`,
+          'Accept': 'application/json',
+          'Intercom-Version': '2.11',
+        },
+      });
+
+      if (!r.ok) {
+        const err = await r.text();
+        return res.status(500).json({ error: `Intercom ${r.status}: ${err.slice(0, 300)}` });
+      }
+
+      const data = await r.json();
+      const convs = data.conversations || [];
+
+      // Group by subject line — skip empty subjects (inbound/in-app messages have no subject)
+      const subjects = {};
+      for (const c of convs) {
+        const subj = stripHtml(c.source?.subject || '').trim();
+        if (!subj) continue;
+        if (!subjects[subj]) subjects[subj] = { subject: subj, replyCount: 0, latestAt: 0 };
+        subjects[subj].replyCount++;
+        if ((c.created_at || 0) > subjects[subj].latestAt) subjects[subj].latestAt = c.created_at;
+      }
+
+      const sorted = Object.values(subjects)
+        .sort((a, b) => b.latestAt - a.latestAt)
+        .slice(0, 15);
+
+      return res.status(200).json({ subjects: sorted, debug: { fetched: convs.length } });
+    }
+
+    return res.status(400).json({ error: 'Invalid mode. Use "search", "replies", or "recentSubjects".' });
 
   } catch (err) {
     return res.status(500).json({ error: err.message });
