@@ -4102,6 +4102,28 @@ function selectRCampaignByIdx(idx) {
     closeRCampaignDropdown();
 }
 
+// Aggregate an array of campaign rows (parent + children) into combined metrics.
+// Falls back to reconstructing open/click counts from rate × sent when raw counts are absent.
+function aggRows(rows) {
+    const sum     = f => rows.reduce((a, r) => a + (r[f] || 0), 0);
+    const sent    = sum('emails_sent') + sum('emails_sent_b');
+    if (!sent) return null;
+    const opened  = rows.reduce((a, r) => a
+        + (r.emails_opened  ?? Math.round((r.open_rate  || 0) * (r.emails_sent  || 0)))
+        + (r.emails_opened_b  || 0), 0);
+    const clicked = rows.reduce((a, r) => a
+        + (r.emails_clicked ?? Math.round((r.click_rate || 0) * (r.emails_sent  || 0)))
+        + (r.emails_clicked_b || 0), 0);
+    const unsub   = sum('unsubscribed');
+    return {
+        emails_sent:        sent,
+        open_rate:          opened  ? opened  / sent   : null,
+        click_rate:         clicked ? clicked / sent   : null,
+        click_to_open_rate: (opened && clicked) ? clicked / opened : null,
+        unsubscribe_rate:   unsub   ? unsub   / sent   : null,
+    };
+}
+
 function fmtDate(d) {
     if (!d) return '';
     return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -4150,28 +4172,16 @@ async function analyzeFullCampaign() {
             emailData    = single;
             emailHistory = history;
 
-            // If parent has no direct send data, aggregate from children
-            if (emailData && !emailData.emails_sent) {
+            // Always fetch children and combine with parent — covers follow-up sends within the same campaign
+            if (emailData) {
                 const { data: kids } = await db.from('lifecycle_campaigns')
-                    .select('emails_sent, emails_sent_b, emails_opened, emails_opened_b, emails_clicked, emails_clicked_b, unsubscribed, bounced')
+                    .select('emails_sent, emails_sent_b, emails_opened, emails_opened_b, emails_clicked, emails_clicked_b, unsubscribed, bounced, open_rate, click_rate')
                     .eq('parent_campaign', emailData.campaign_name);
                 if (kids && kids.length) {
-                    const sum = f => kids.reduce((a, k) => a + (k[f] || 0), 0);
-                    const sent    = sum('emails_sent') + sum('emails_sent_b');
-                    const opened  = sum('emails_opened') + sum('emails_opened_b');
-                    const clicked = sum('emails_clicked') + sum('emails_clicked_b');
-                    const unsub   = sum('unsubscribed');
-                    if (sent) {
-                        emailData = {
-                            ...emailData,
-                            emails_sent:        sent,
-                            open_rate:          opened  ? opened  / sent   : null,
-                            click_rate:         clicked ? clicked / sent   : null,
-                            click_to_open_rate: (opened && clicked) ? clicked / opened : null,
-                            unsubscribe_rate:   unsub   ? unsub   / sent   : null,
-                            _aggregated:        true,
-                            _childCount:        kids.length,
-                        };
+                    const pool = [...(emailData.emails_sent ? [emailData] : []), ...kids];
+                    const agg  = aggRows(pool);
+                    if (agg) {
+                        emailData = { ...emailData, ...agg, _aggregated: true, _childCount: kids.length };
                     }
                 }
             }
@@ -4301,38 +4311,25 @@ async function generateReport() {
     const tests   = abtests   || [];
     const history = allHistory || [];
 
-    // Enrich parent campaigns that have no direct data by aggregating from children
+    // Enrich all parent campaigns by combining their own data with any child sends
     let camps = campaigns || [];
-    const parentNamesNeedingAgg = camps.filter(c => !c.emails_sent).map(c => c.campaign_name);
-    if (parentNamesNeedingAgg.length) {
+    const allParentNames = camps.map(c => c.campaign_name);
+    if (allParentNames.length) {
         const { data: allKids } = await db.from('lifecycle_campaigns')
-            .select('parent_campaign, emails_sent, emails_sent_b, emails_opened, emails_opened_b, emails_clicked, emails_clicked_b, unsubscribed, bounced')
-            .in('parent_campaign', parentNamesNeedingAgg);
+            .select('parent_campaign, emails_sent, emails_sent_b, emails_opened, emails_opened_b, emails_clicked, emails_clicked_b, unsubscribed, bounced, open_rate, click_rate')
+            .in('parent_campaign', allParentNames);
         const kidsByParent = {};
         (allKids || []).forEach(k => {
             if (!kidsByParent[k.parent_campaign]) kidsByParent[k.parent_campaign] = [];
             kidsByParent[k.parent_campaign].push(k);
         });
         camps = camps.map(c => {
-            if (c.emails_sent) return c;
-            const kids = kidsByParent[c.campaign_name];
-            if (!kids || !kids.length) return c;
-            const sum  = f => kids.reduce((a, k) => a + (k[f] || 0), 0);
-            const sent    = sum('emails_sent') + sum('emails_sent_b');
-            const opened  = sum('emails_opened') + sum('emails_opened_b');
-            const clicked = sum('emails_clicked') + sum('emails_clicked_b');
-            const unsub   = sum('unsubscribed');
-            if (!sent) return c;
-            return {
-                ...c,
-                emails_sent:        sent,
-                open_rate:          opened  ? opened  / sent   : null,
-                click_rate:         clicked ? clicked / sent   : null,
-                click_to_open_rate: (opened && clicked) ? clicked / opened : null,
-                unsubscribe_rate:   unsub   ? unsub   / sent   : null,
-                _aggregated: true,
-                _childCount: kids.length,
-            };
+            const kids = kidsByParent[c.campaign_name] || [];
+            if (!kids.length) return c;
+            const pool = [...(c.emails_sent ? [c] : []), ...kids];
+            const agg  = aggRows(pool);
+            if (!agg) return c;
+            return { ...c, ...agg, _aggregated: true, _childCount: kids.length };
         });
     }
 
