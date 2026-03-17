@@ -91,6 +91,36 @@ WHERE cmf.CALENDAR_DATE_FIRST_FIN_OR_LEGACY_RESOLUTION_BOT_CONVERSATION >= DATEA
   AND da.IS_PAID_APP_NOW = true AND da.IS_DELETED_APP = false AND da.INCLUDE_IN_ANALYSIS = true
 `.trim();
 
+const MOCK_SIGNALS = [
+  {
+    id: 'fin_no_setup',
+    label: 'Fin Active — No Setup',
+    count: 847,
+    description: "Activated Fin but haven't configured guidance or procedures — Fin is running blind.",
+    lifecycle_angle: 'These workspaces need education on Fin optimisation to unlock resolution rate gains.',
+    urgency: 'high',
+    mock: true,
+  },
+  {
+    id: 'fin_low_resolution',
+    label: 'Fin Under-utilizers',
+    count: 312,
+    description: 'Active Fin users (20+ conversations/month) with hard resolution rate below 20%.',
+    lifecycle_angle: "They're using Fin but it's underperforming — likely missing guidance/procedures.",
+    urgency: 'high',
+    mock: true,
+  },
+  {
+    id: 'new_fin_activators',
+    label: 'New Fin Activators',
+    count: 203,
+    description: 'Had their first Fin conversation in the last 60 days — in the critical adoption window.',
+    lifecycle_angle: 'Highest-leverage window for lifecycle emails to drive deep Fin adoption before habits form.',
+    urgency: 'medium',
+    mock: true,
+  },
+];
+
 module.exports = async function (req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
@@ -98,7 +128,7 @@ module.exports = async function (req, res) {
 
   const token = (process.env.SNOWFLAKE_PAT || '').trim();
   if (!token) {
-    return res.status(200).json({ setupRequired: true, error: 'SNOWFLAKE_PAT not configured' });
+    return res.status(200).json({ signals: MOCK_SIGNALS, mock: true });
   }
 
   try {
@@ -139,6 +169,10 @@ module.exports = async function (req, res) {
       ],
     });
   } catch (e) {
+    // Fall back to mock data on network policy or auth errors
+    if (e.message && (e.message.includes('Network policy') || e.message.includes('JWT'))) {
+      return res.status(200).json({ signals: MOCK_SIGNALS, mock: true });
+    }
     return res.status(500).json({ error: e.message });
   }
 };

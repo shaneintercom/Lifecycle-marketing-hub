@@ -6063,23 +6063,19 @@ async function loadCoverageMap() {
     try {
         const r = await fetch('/api/lifecycle-signals');
         const json = await r.json();
-        if (json.setupRequired) {
-            document.getElementById('coverage-signals').innerHTML =
-                `<div class="alert alert-info">Snowflake not connected — add <code>SNOWFLAKE_PRIVATE_KEY</code> to Vercel environment variables.</div>`;
-            return;
-        }
         if (json.error) throw new Error(json.error);
         _coverageSignalsCache = json.signals;
-        renderSignalCards(json.signals);
+        renderSignalCards(json.signals, json.mock);
     } catch(e) {
         document.getElementById('coverage-signals').innerHTML =
             `<div style="color:#f87171;font-size:13px;">Could not load signals: ${e.message}</div>`;
     }
 }
 
-function renderSignalCards(signals) {
+function renderSignalCards(signals, isMock) {
+    const mockBadge = isMock ? `<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">⚠ Sample data — Snowflake connection pending</div>` : '';
     document.getElementById('coverage-signals').innerHTML =
-        `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
+        mockBadge + `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
             ${signals.map(s => `
             <div class="coverage-signal-card urgency-${s.urgency}">
                 <div class="sig-label">${s.label}</div>
