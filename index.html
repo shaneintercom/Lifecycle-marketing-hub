@@ -4078,22 +4078,27 @@ function filterRCampaigns(q) {
 
     if (!matches.length) {
         dd.innerHTML = `<div style="padding:10px 14px;font-size:12px;color:var(--muted);">No campaigns found</div>`;
-    } else {
-        dd.innerHTML = matches.slice(0, 40).map(c => {
-            const label = (c.campaign_name + (c.send_date ? ' — ' + c.send_date : '')).replace(/'/g, "\\'");
-            return `<div class="ci-metric-opt" onmousedown="selectRCampaign('${c.campaign_id}', '${label}')"`+
-            ` style="padding:9px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid #1e293b;">`+
-            `<div style="font-weight:500;">${c.campaign_name}</div>`+
-            `${c.send_date ? `<div style="font-size:11px;color:var(--muted);margin-top:1px;">${c.send_date}</div>` : ''}`+
-            `</div>`;
-        }).join('');
+        dd.style.display = '';
+        return;
     }
+
+    dd.innerHTML = matches.slice(0, 40).map((c, i) => {
+        const idx = _rCampaigns.indexOf(c);
+        return `<div class="ci-metric-opt" data-idx="${idx}"` +
+            ` onmousedown="selectRCampaignByIdx(${idx})"` +
+            ` style="padding:9px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid #1e293b;">` +
+            `<div style="font-weight:500;">${c.campaign_name}</div>` +
+            `${c.send_date ? `<div style="font-size:11px;color:var(--muted);margin-top:1px;">${c.send_date}</div>` : ''}` +
+            `</div>`;
+    }).join('');
     dd.style.display = '';
 }
 
-function selectRCampaign(id, label) {
-    document.getElementById('r-campaign').value        = id;
-    document.getElementById('r-campaign-search').value = label;
+function selectRCampaignByIdx(idx) {
+    const c = _rCampaigns[idx];
+    if (!c) return;
+    document.getElementById('r-campaign').value        = c.campaign_id;
+    document.getElementById('r-campaign-search').value = c.campaign_name + (c.send_date ? ' — ' + c.send_date : '');
     closeRCampaignDropdown();
 }
 
