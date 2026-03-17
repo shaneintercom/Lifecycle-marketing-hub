@@ -818,7 +818,16 @@
                 <div class="grid-2" style="gap:12px;margin-bottom:14px;">
                     <div class="field" style="margin-bottom:0;">
                         <label>Campaign <span style="font-weight:400;color:var(--muted);">— optional, for email metrics</span></label>
-                        <select id="r-campaign"><option value="">Loading...</option></select>
+                        <div style="position:relative;">
+                            <input type="text" id="r-campaign-search" placeholder="Search campaigns…" autocomplete="off"
+                                style="width:100%;padding-right:28px;"
+                                oninput="filterRCampaigns(this.value)"
+                                onfocus="openRCampaignDropdown()"
+                                onblur="setTimeout(closeRCampaignDropdown, 150)">
+                            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:12px;">&#9660;</span>
+                            <input type="hidden" id="r-campaign" value="">
+                            <div id="r-campaign-dropdown" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#1e293b;border:1px solid #334155;border-radius:6px;max-height:260px;overflow-y:auto;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);"></div>
+                        </div>
                     </div>
                     <div class="field" style="margin-bottom:0;">
                         <label>Intercom Series ID <span style="font-weight:400;color:var(--muted);">— optional &middot; find in URL: &hellip;/outbound/series/<strong style="color:var(--text);">XXXXXXXX</strong></span></label>
@@ -4043,14 +4052,48 @@ async function loadCampaignsForReport() {
     const y = now.getFullYear(), m = now.getMonth();
     document.getElementById('r-from').value = new Date(y, m, 1).toISOString().slice(0, 10);
     document.getElementById('r-to').value   = new Date(y, m + 1, 0).toISOString().slice(0, 10);
-    // Populate single campaign dropdown
-    const { data } = await db.from('lifecycle_campaigns').select('campaign_id, campaign_name, send_date').is('parent_campaign', null).order('send_date', { ascending: false }).limit(100);
-    const sel = document.getElementById('r-campaign');
-    if (data && data.length) {
-        sel.innerHTML = data.map(c => `<option value="${c.campaign_id}">${c.campaign_name}${c.send_date ? ' — ' + c.send_date : ''}</option>`).join('');
+    // Populate campaign search picker
+    const { data } = await db.from('lifecycle_campaigns').select('campaign_id, campaign_name, send_date').is('parent_campaign', null).order('send_date', { ascending: false }).limit(200);
+    _rCampaigns = data || [];
+    const searchEl = document.getElementById('r-campaign-search');
+    if (searchEl) searchEl.placeholder = _rCampaigns.length ? `Search ${_rCampaigns.length} campaigns…` : 'No campaigns yet';
+}
+
+let _rCampaigns = [];
+
+function openRCampaignDropdown() {
+    filterRCampaigns(document.getElementById('r-campaign-search').value);
+}
+
+function closeRCampaignDropdown() {
+    document.getElementById('r-campaign-dropdown').style.display = 'none';
+}
+
+function filterRCampaigns(q) {
+    const dd = document.getElementById('r-campaign-dropdown');
+    const lower = (q || '').toLowerCase();
+    const matches = lower
+        ? _rCampaigns.filter(c => c.campaign_name.toLowerCase().includes(lower))
+        : _rCampaigns;
+
+    if (!matches.length) {
+        dd.innerHTML = `<div style="padding:10px 14px;font-size:12px;color:var(--muted);">No campaigns found</div>`;
     } else {
-        sel.innerHTML = '<option value="">No campaigns yet</option>';
+        dd.innerHTML = matches.slice(0, 40).map(c =>
+            `<div class="ci-metric-opt" onmousedown="selectRCampaign('${c.campaign_id}', ${JSON.stringify(c.campaign_name + (c.send_date ? ' — ' + c.send_date : ''))})"`+
+            ` style="padding:9px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid #1e293b;">`+
+            `<div style="font-weight:500;">${c.campaign_name}</div>`+
+            `${c.send_date ? `<div style="font-size:11px;color:var(--muted);margin-top:1px;">${c.send_date}</div>` : ''}`+
+            `</div>`
+        ).join('');
     }
+    dd.style.display = '';
+}
+
+function selectRCampaign(id, label) {
+    document.getElementById('r-campaign').value        = id;
+    document.getElementById('r-campaign-search').value = label;
+    closeRCampaignDropdown();
 }
 
 function fmtDate(d) {
