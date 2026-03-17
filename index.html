@@ -4194,15 +4194,16 @@ function renderSingleCampaignReport(c, history, analyticsResult) {
         const catAvgOpen  = avgMetric(catH, 'open_rate');
         const catAvgClick = avgMetric(catH, 'click_rate');
         const catAvgCTOR  = avgMetric(catH, 'click_to_open_rate');
+        const hasMetrics  = c.open_rate != null || c.click_rate != null || c.emails_sent != null;
         html += `<div class="report-section" style="margin-bottom:20px;">
             <div class="dash-section-label" style="margin-bottom:16px;">${c.campaign_name}</div>
-            <div class="report-kpis">
+            ${hasMetrics ? `<div class="report-kpis">
                 ${c.emails_sent ? `<div class="report-kpi"><div class="report-kpi-val">${Number(c.emails_sent).toLocaleString()}</div><div class="report-kpi-label">Emails Sent</div></div>` : ''}
-                <div class="report-kpi"><div class="report-kpi-val">${p(c.open_rate)}</div><div class="report-kpi-label">Open Rate</div><div class="report-kpi-bench">${benchArrow(c.open_rate, catAvgOpen)}</div></div>
-                <div class="report-kpi"><div class="report-kpi-val">${p(c.click_rate)}</div><div class="report-kpi-label">Click Rate</div><div class="report-kpi-bench">${benchArrow(c.click_rate, catAvgClick)}</div></div>
-                <div class="report-kpi"><div class="report-kpi-val">${p(c.click_to_open_rate)}</div><div class="report-kpi-label">CTOR</div><div class="report-kpi-bench">${benchArrow(c.click_to_open_rate, catAvgCTOR)}</div></div>
+                ${c.open_rate != null ? `<div class="report-kpi"><div class="report-kpi-val">${p(c.open_rate)}</div><div class="report-kpi-label">Open Rate</div><div class="report-kpi-bench">${benchArrow(c.open_rate, catAvgOpen)}</div></div>` : ''}
+                ${c.click_rate != null ? `<div class="report-kpi"><div class="report-kpi-val">${p(c.click_rate)}</div><div class="report-kpi-label">Click Rate</div><div class="report-kpi-bench">${benchArrow(c.click_rate, catAvgClick)}</div></div>` : ''}
+                ${c.click_to_open_rate != null ? `<div class="report-kpi"><div class="report-kpi-val">${p(c.click_to_open_rate)}</div><div class="report-kpi-label">CTOR</div><div class="report-kpi-bench">${benchArrow(c.click_to_open_rate, catAvgCTOR)}</div></div>` : ''}
                 ${c.unsubscribe_rate != null ? `<div class="report-kpi"><div class="report-kpi-val">${p(c.unsubscribe_rate)}</div><div class="report-kpi-label">Unsub Rate</div></div>` : ''}
-            </div>
+            </div>` : `<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">No email performance data recorded for this campaign. Upload results via CSV in the Campaign Library to see metrics here.</div>`}
             ${[['Audience', c.audience_segment], ['Subject', c.subject_line ? `"${c.subject_line}"` : null], ['Send date', c.send_date ? fmtDate(c.send_date) : null]].filter(([,v]) => v).map(([l,v]) => `<div style="font-size:12px;color:var(--muted);margin-top:8px;"><span style="font-weight:600;color:var(--text);">${l}:</span> ${v}</div>`).join('')}
             ${c.notes ? `<div style="font-size:13px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">${c.notes}</div>` : ''}
         </div>`;
