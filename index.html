@@ -4150,10 +4150,11 @@ async function generateReport() {
     to   = val('r-to');
     if (!from || !to) { btn.textContent = 'Generate Report'; btn.disabled = false; alert('Please select a date range.'); return; }
 
-    const [{ data: campaigns }, { data: abtests }, { data: allHistory }] = await Promise.all([
+    const [{ data: campaigns }, { data: abtests }, { data: allHistory }, { data: allSends }] = await Promise.all([
         db.from('lifecycle_campaigns').select('*').gte('send_date', from).lte('send_date', to).is('parent_campaign', null).order('send_date', { ascending: true }),
         db.from('lifecycle_ab_tests').select('*').gte('test_date', from).lte('test_date', to).order('test_date', { ascending: true }),
         db.from('lifecycle_campaigns').select('open_rate, click_rate, click_to_open_rate, category').not('send_date', 'is', null),
+        db.from('lifecycle_campaigns').select('emails_sent, emails_sent_b').gte('send_date', from).lte('send_date', to).not('emails_sent', 'is', null),
     ]);
 
     btn.textContent = 'Generate Report'; btn.disabled = false;
@@ -4162,7 +4163,8 @@ async function generateReport() {
     const tests   = abtests   || [];
     const history = allHistory || [];
 
-    const totalSent      = camps.reduce((a, c) => a + (c.emails_sent || 0), 0);
+    // Sum all rows with a CSV upload (parents with data + children) — avoids double-counting containers
+    const totalSent = (allSends || []).reduce((a, c) => a + (c.emails_sent || 0) + (c.emails_sent_b || 0), 0);
     const periodAvgOpen  = avgMetric(camps,   'open_rate');
     const periodAvgClick = avgMetric(camps,   'click_rate');
     const periodAvgCTOR  = avgMetric(camps,   'click_to_open_rate');
