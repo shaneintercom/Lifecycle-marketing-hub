@@ -2012,8 +2012,10 @@ function renderLibrary() {
 
     // ── Sort parent groups ──
     parents.sort((a, b) => {
-        const aggA = childMap[a.campaign_name]?.length ? calcAgg(childMap[a.campaign_name]) : null;
-        const aggB = childMap[b.campaign_name]?.length ? calcAgg(childMap[b.campaign_name]) : null;
+        const kidsA = childMap[a.campaign_name] || [];
+        const kidsB = childMap[b.campaign_name] || [];
+        const aggA  = kidsA.length ? aggRows([...(a.emails_sent ? [a] : []), ...kidsA]) : null;
+        const aggB  = kidsB.length ? aggRows([...(b.emails_sent ? [b] : []), ...kidsB]) : null;
         const col  = _libSort.col;
         let va = (aggA?.[col] ?? a[col]) ?? null;
         let vb = (aggB?.[col] ?? b[col]) ?? null;
@@ -2095,7 +2097,8 @@ function renderLibrary() {
     const rows = [];
     parents.forEach(c => {
         const kids = childMap[c.campaign_name] || [];
-        rows.push(rowHTML(c, kids.length && !c.emails_sent ? calcAgg(kids) : null));
+        const pool = [...(c.emails_sent ? [c] : []), ...kids];
+        rows.push(rowHTML(c, kids.length ? aggRows(pool) : null));
         kids.forEach(child => rows.push(subRowHTML(child)));
     });
 
