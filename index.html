@@ -4,65 +4,93 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lifecycle Marketing Hub</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23818cf8'/><stop offset='1' stop-color='%23a855f7'/></linearGradient></defs><rect width='32' height='32' rx='7' fill='url(%23g)'/><text x='16' y='22' font-family='system-ui,sans-serif' font-size='11' font-weight='800' fill='white' text-anchor='middle'>CLM</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23818cf8'/><stop offset='1' stop-color='%23f97316'/></linearGradient></defs><rect width='32' height='32' rx='7' fill='url(%23g)'/><text x='16' y='22' font-family='system-ui,sans-serif' font-size='11' font-weight='800' fill='white' text-anchor='middle'>CLM</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <style>
         :root {
             --brand: #818cf8;
-            --brand-light: #312e81;
-            --bg: #0f172a;
-            --surface: #1e293b;
-            --border: #334155;
-            --text: #e2e8f0;
-            --muted: #94a3b8;
+            --brand-light: #1e2060;
+            --accent: #f97316;
+            --bg: #06101e;
+            --bg-2: #0a1828;
+            --surface: #0d1b2e;
+            --surface-2: #122035;
+            --border: #1a2e44;
+            --text: #eef2ff;
+            --muted: #6c84a2;
             --success: #10b981;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+            position: relative;
+        }
+        /* ── NEBULA ATMOSPHERE ── fixed glow rising from the viewport bottom */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 140% 65% at 50% 115%, rgba(249,115,22,0.13) 0%, rgba(249,115,22,0.04) 28%, transparent 52%),
+                radial-gradient(ellipse 100% 55% at 50% 112%, rgba(129,140,248,0.12) 0%, rgba(129,140,248,0.04) 38%, transparent 58%),
+                radial-gradient(ellipse 55% 28% at 18% 102%, rgba(168,85,247,0.07) 0%, transparent 42%),
+                radial-gradient(ellipse 55% 28% at 82% 102%, rgba(249,115,22,0.06) 0%, transparent 42%),
+                radial-gradient(ellipse 30% 15% at 50% 108%, rgba(255,220,180,0.06) 0%, transparent 35%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        header, nav, main { position: relative; z-index: 1; }
 
-        header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; }
-        header h1 { font-size: 18px; font-weight: 700; }
+        header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 18px 28px; position: relative; }
+        header::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, var(--brand) 0%, var(--accent) 50%, transparent 100%); opacity: 0.5; }
+        header h1 { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; }
         header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
 
-        nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; overflow-x: auto; }
-        nav button { background: none; border: none; padding: 12px 16px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; }
-        nav button.active { color: var(--brand); border-bottom-color: var(--brand); }
-        nav button:hover:not(.active) { color: var(--text); }
+        nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 8px 20px; display: flex; overflow-x: auto; gap: 2px; }
+        nav button { background: none; border: none; padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); border-radius: 6px; transition: all 0.15s; white-space: nowrap; }
+        nav button.active { color: var(--brand); background: rgba(129,140,248,0.1); font-weight: 600; }
+        nav button:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.04); }
 
-        main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+        main { padding: 28px; max-width: 1400px; margin: 0 auto; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
-        h2 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+        h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 16px; }
 
-        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
-        .card-flush { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0; margin-bottom: 16px; overflow: hidden; }
+        .card { background: rgba(13,27,46,0.88); backdrop-filter: blur(1px); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+        .card-flush { background: rgba(13,27,46,0.88); backdrop-filter: blur(1px); border: 1px solid var(--border); border-radius: 10px; padding: 0; margin-bottom: 16px; overflow: hidden; }
 
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 
         .field { margin-bottom: 14px; }
-        .field label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
-        .field input, .field select, .field textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; outline: none; background: var(--surface); color: var(--text); transition: border-color 0.15s; }
-        .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--brand); }
+        .field label { display: block; font-size: 10px; font-weight: 500; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.08em; font-family: 'JetBrains Mono', monospace; }
+        .field input, .field select, .field textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 7px; font-size: 14px; font-family: inherit; outline: none; background: var(--bg-2); color: var(--text); transition: border-color 0.15s; }
+        .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(129,140,248,0.12); }
         .field textarea { resize: vertical; min-height: 80px; }
 
-        .btn { padding: 9px 18px; border-radius: 6px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
-        .btn-primary { background: var(--brand); color: white; }
-        .btn-primary:hover { opacity: 0.85; }
-        .btn-sm { padding: 6px 12px; font-size: 12px; background: #334155; border: 1px solid var(--border); color: var(--text); border-radius: 6px; cursor: pointer; }
+        .btn { padding: 9px 18px; border-radius: 7px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.15s, transform 0.12s; font-family: inherit; }
+        .btn-primary { background: linear-gradient(135deg, var(--brand) 0%, #a855f7 100%); color: white; }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; cursor: pointer; }
 
-        .alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 14px; }
-        .alert-success { background: #064e3b; color: #6ee7b7; }
-        .alert-error { background: #7f1d1d; color: #fca5a5; }
-        .alert-info { background: var(--brand-light); color: #a5b4fc; }
+        .alert { padding: 10px 14px; border-radius: 7px; font-size: 13px; margin-bottom: 14px; }
+        .alert-success { background: #052e1e; color: #6ee7b7; border: 1px solid #065f46; }
+        .alert-error { background: #2a0a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+        .alert-info { background: #0d1640; color: #a5b4fc; border: 1px solid var(--brand-light); }
 
         table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); border-bottom: 1px solid var(--border); background: #0f172a; }
+        th { text-align: left; padding: 10px 14px; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); border-bottom: 1px solid var(--border); background: var(--bg-2); font-family: 'JetBrains Mono', monospace; }
         td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
         tr:last-child td { border-bottom: none; }
-        tbody tr:hover td { background: #263347; }
+        tbody tr:hover td { background: #0f1e30; }
 
         .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
         .badge-Launches          { background: #1e3a5f; color: #93c5fd; }
@@ -77,7 +105,7 @@
         .badge-Newsletter    { background: #1e2a3d; color: #93c5fd; }
         .badge-Ops           { background: #1e1e2e; color: #94a3b8; }
 
-        .bench-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+        .bench-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
         .bench-cat { margin-bottom: 12px; }
         .bench-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
         .bench-metric { text-align: center; }
@@ -85,25 +113,26 @@
         .bench-metric .value { font-size: 22px; font-weight: 700; color: var(--brand); }
 
         .filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-        .filters select, .filters input[type="text"] { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--surface); color: var(--text); }
+        .filters select, .filters input[type="text"] { padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; background: var(--bg-2); color: var(--text); }
         .filters span { color: var(--muted); font-size: 13px; }
 
-        .inner-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
-        .inner-tabs button { background: none; border: none; padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+        .inner-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; gap: 2px; }
+        .inner-tabs button { background: none; border: none; padding: 8px 12px; cursor: pointer; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 5px 5px 0 0; transition: all 0.12s; }
         .inner-tabs button.active { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
+        .inner-tabs button:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.03); }
 
         .winner-a { color: var(--success); font-weight: 700; }
         .winner-b { color: var(--brand); font-weight: 700; }
 
-        .prompt-box { background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 20px; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.7; white-space: pre-wrap; margin-top: 12px; max-height: 420px; overflow-y: auto; border: 1px solid var(--border); }
+        .prompt-box { background: var(--bg); color: #e2e8f0; border-radius: 8px; padding: 20px; font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 12px; line-height: 1.7; white-space: pre-wrap; margin-top: 12px; max-height: 420px; overflow-y: auto; border: 1px solid var(--border); }
         /* ── REPORT OUTPUT ── */
         .report-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 16px; }
-        .report-kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
-        .report-kpi-val { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
-        .report-kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+        .report-kpi { background: rgba(13,27,46,0.9); border: 1px solid var(--border); border-top: 2px solid var(--brand); border-radius: 10px; padding: 14px 16px; }
+        .report-kpi-val { font-size: 22px; font-weight: 700; margin-bottom: 2px; letter-spacing: -0.02em; }
+        .report-kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-family: 'JetBrains Mono', monospace; }
         .report-kpi-bench { font-size: 11px; margin-top: 4px; }
         .report-section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; }
-        .report-section h3 { font-size: 11px; font-weight: 700; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+        .report-section h3 { font-size: 10px; font-weight: 500; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
         .report-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--border); gap: 12px; }
         .report-row:last-child { border-bottom: none; }
         .report-row-metrics { display: flex; gap: 20px; text-align: right; flex-shrink: 0; }
@@ -111,7 +140,7 @@
         .report-metric-label { font-size: 11px; color: var(--muted); }
         .bench-up { color: var(--success); }
         .bench-down { color: #fca5a5; }
-        .slack-box { background: #1a1d21; border: 1px solid #444; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 13px; white-space: pre-wrap; line-height: 1.7; color: #d1d2d3; }
+        .slack-box { background: #0e1218; border: 1px solid #2a3040; border-radius: 8px; padding: 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; white-space: pre-wrap; line-height: 1.7; color: #d1d2d3; }
 
         .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
         .empty { text-align: center; padding: 48px; color: var(--muted); }
@@ -122,13 +151,13 @@
         .cal-nav-label { font-size: 14px; font-weight: 600; color: var(--muted); flex: 1; text-align: center; }
         .cal-3month { display: flex; flex-direction: column; gap: 32px; }
         .cal-month-block { width: 100%; }
-        .cal-month-title { font-size: 18px; font-weight: 700; margin-bottom: 12px; color: var(--text); padding-bottom: 10px; border-bottom: 1px solid var(--border); }
-        .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--border); border-radius: 8px; overflow: hidden; }
-        .cal-day-header { background: #0f172a; padding: 10px 8px; text-align: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); min-width: 0; }
+        .cal-month-title { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px; color: var(--text); padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--border); border-radius: 10px; overflow: hidden; }
+        .cal-day-header { background: var(--bg-2); padding: 10px 8px; text-align: center; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); min-width: 0; font-family: 'JetBrains Mono', monospace; }
         .cal-day { background: var(--surface); min-height: 110px; padding: 8px; vertical-align: top; min-width: 0; overflow: hidden; }
-        .cal-day.other-month { background: #0b1222; }
-        .cal-day.other-month .cal-date { color: #3b4f68; }
-        .cal-day.today { background: #1a2744; }
+        .cal-day.other-month { background: #070f1b; }
+        .cal-day.other-month .cal-date { color: #2a3d55; }
+        .cal-day.today { background: #0e1f3a; }
         .cal-date { font-size: 13px; font-weight: 600; margin-bottom: 5px; color: var(--muted); }
         .cal-date-today { background: var(--brand); color: white; border-radius: 999px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
         .cal-event { font-size: 11px; padding: 3px 7px; border-radius: 4px; margin-bottom: 3px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.5; display: block; width: 100%; box-sizing: border-box; }
@@ -158,10 +187,11 @@
         .shipped-copy-btn:hover { color: var(--text); border-color: var(--text); }
 
         /* ── SERIES REPLIES ── */
-        .sr-recent-chip { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 9px; cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s; max-width: 260px; min-width: 160px; }
+        .sr-recent-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; transition: border-color 0.15s, background 0.15s; max-width: 100%; }
         .sr-recent-chip:hover { border-color: var(--brand); background: rgba(99,102,241,0.06); }
-        .sr-recent-chip-name { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .sr-recent-chip-sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sr-recent-chip.active { border-color: var(--brand); background: rgba(99,102,241,0.1); }
+        .sr-recent-chip-name { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+        .sr-recent-chip-sub { font-size: 11px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
         .sr-prompt-chip { font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
         .sr-prompt-chip:hover { border-color: var(--brand); color: var(--brand); background: rgba(99,102,241,0.06); }
         .sr-prompt-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
@@ -173,7 +203,7 @@
         .cal-legend span { font-size: 12px; color: var(--muted); }
 
         /* ── CALENDAR TOOLTIP ── */
-        #cal-tooltip { position: fixed; background: #0f172a; color: #e2e8f0; border: 1px solid var(--border); border-radius: 6px; padding: 7px 11px; font-size: 12px; max-width: 300px; pointer-events: none; z-index: 200; line-height: 1.5; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: none; }
+        #cal-tooltip { position: fixed; background: var(--surface-2); color: #e2e8f0; border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; font-size: 12px; max-width: 300px; pointer-events: none; z-index: 200; line-height: 1.5; box-shadow: 0 8px 32px rgba(0,0,0,0.7); display: none; }
 
         /* ── CAMPAIGN DETAIL MODAL ── */
         #cal-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: none; }
@@ -183,12 +213,16 @@
         #ab-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: none; }
         #ab-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 101; width: 640px; max-width: 94vw; display: none; }
         #ab-modal .card { margin: 0; max-height: 88vh; overflow-y: auto; }
+        /* ── LOG A/B TEST MODAL ── */
+        #ab-add-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: none; }
+        #ab-add-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 101; width: 760px; max-width: 96vw; display: none; }
+        #ab-add-modal .card { margin: 0; max-height: 90vh; overflow-y: auto; }
         /* ── LOG CAMPAIGN MODAL ── */
         #log-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: none; }
         #log-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 101; width: 640px; max-width: 94vw; display: none; }
         #log-modal .card { margin: 0; max-height: 88vh; overflow-y: auto; }
-        .abt-variant-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
-        .abt-winner-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 12px 0; }
+        .abt-variant-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+        .abt-winner-box { background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 12px 0; }
         .cm-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
         .cm-title { font-size: 16px; font-weight: 700; line-height: 1.45; }
         .cm-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 22px; line-height: 1; flex-shrink: 0; padding: 0; }
@@ -199,20 +233,20 @@
         .cm-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
         /* ── CLICKABLE TABLE ROWS ── */
         tbody tr.clickable { cursor: pointer; }
-        tbody tr.clickable:hover td { background: #263347; }
+        tbody tr.clickable:hover td { background: #0f1e30; }
 
         /* ── CSV IMPORT ── */
         .csv-toggle { background: none; border: none; color: var(--brand); font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; letter-spacing: 0.01em; }
         .csv-toggle:hover { text-decoration: underline; }
         .csv-import-body { margin-top: 10px; }
         .csv-import-body > p { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
-        .drop-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 22px 16px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+        .drop-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 22px 16px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
         .drop-zone:hover, .drop-zone.drag-over { border-color: var(--brand); background: rgba(129,140,248,0.06); }
         .drop-zone-icon { font-size: 22px; margin-bottom: 6px; }
         .drop-zone-text { font-size: 13px; color: var(--muted); }
         .drop-zone-text u { color: var(--brand); cursor: pointer; }
         .drop-zone-filename { font-size: 12px; color: var(--success); margin-top: 6px; font-weight: 600; }
-        .ab-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-top: 10px; }
+        .ab-box { background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-top: 10px; }
         .ab-box-title { font-size: 12px; font-weight: 700; color: var(--brand); margin-bottom: 10px; }
         .ab-variant { padding: 8px 0; border-bottom: 1px solid var(--border); }
         .ab-variant:last-of-type { border-bottom: none; padding-bottom: 0; }
@@ -233,13 +267,13 @@
         .mf-table td { padding: 4px 8px 4px 0; vertical-align: middle; }
         .mf-table td:last-child { text-align: right; }
         .mf-row-label { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
-        .mf-input { width: 110px; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; text-align: right; }
+        .mf-input { width: 110px; padding: 6px 10px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; text-align: right; font-family: 'JetBrains Mono', monospace; }
         .mf-input:focus { outline: none; border-color: var(--brand); }
         .mf-rate { font-size: 14px; font-weight: 700; color: var(--brand); min-width: 60px; display: inline-block; }
         .mf-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
 
         /* ── CODA SYNC ── */
-        .sync-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+        .sync-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
         .sync-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; gap: 12px; }
         .sync-row:last-child { border-bottom: none; }
         .sync-row-name { flex: 1; font-weight: 600; }
@@ -248,7 +282,7 @@
 
         /* ── INSPIRATION BOARD ── */
         .insp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-        .insp-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: border-color 0.15s; }
+        .insp-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.15s; }
         .insp-card:hover { border-color: var(--brand); }
         .insp-card-img { width: 100%; height: 200px; object-fit: cover; object-position: top; background: var(--bg); display: block; cursor: zoom-in; }
         .insp-card-body { padding: 12px; }
@@ -268,10 +302,11 @@
         .ai-suggest-card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--brand); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; }
         .ai-suggest-rationale { font-size: 11px; color: var(--muted); line-height: 1.55; margin-top: 6px; flex: 1; }
         .backlog-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: start; }
-        .backlog-col { background: #0b1222; border-radius: 8px; padding: 12px; }
-        .backlog-col-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .backlog-col { background: #060e1b; border-radius: 10px; padding: 12px; border: 1px solid var(--border); }
+        .backlog-col-header { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; font-family: 'JetBrains Mono', monospace; }
         .backlog-col-header .count { background: #1e293b; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
-        .backlog-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+        .backlog-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 8px; transition: border-color 0.15s; }
+        .backlog-card:hover { border-color: #2a4060; }
         .backlog-hypothesis { font-size: 13px; line-height: 1.5; margin-bottom: 8px; }
         .backlog-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
         .backlog-element { font-size: 11px; color: var(--muted); background: #334155; padding: 2px 7px; border-radius: 4px; }
@@ -283,13 +318,13 @@
         .priority-Low    { background: #1e3a5f; color: #93c5fd; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; }
 
         /* ── CAMPAIGN LIBRARY ENHANCEMENTS ── */
-        .lib-summary { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+        .lib-summary { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
         .lib-kpis { display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 12px; }
         .lib-kpi { flex: 1; padding: 4px 16px; border-right: 1px solid var(--border); text-align: center; }
         .lib-kpi:first-child { padding-left: 0; text-align: left; }
         .lib-kpi:last-child { border-right: none; }
         .lib-kpi-val { font-size: 20px; font-weight: 700; }
-        .lib-kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 1px; }
+        .lib-kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 1px; font-family: 'JetBrains Mono', monospace; }
         .lib-cat-row { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 12px; border-top: 1px solid var(--border); }
         .cell-hot  { color: #4ade80 !important; font-weight: 600; }
         .cell-cold { color: #fca5a5 !important; }
@@ -305,20 +340,20 @@
         }
         /* ── DASHBOARD UPGRADE ── */
         .dash-kpi-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
-        .dash-kpi { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
-        .dash-kpi .kpi-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin-bottom:8px; }
-        .dash-kpi .kpi-value { font-size:26px; font-weight:800; color:var(--text); line-height:1.1; }
+        .dash-kpi { background:rgba(13,27,46,0.9); border:1px solid var(--border); border-top:2px solid var(--brand); border-radius:10px; padding:16px 18px; }
+        .dash-kpi .kpi-label { font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:8px; font-family:'JetBrains Mono',monospace; }
+        .dash-kpi .kpi-value { font-size:26px; font-weight:800; color:var(--text); line-height:1.1; letter-spacing:-0.02em; }
         .dash-kpi .kpi-sub { font-size:12px; margin-top:6px; }
         .kpi-up { color:#4ade80; } .kpi-down { color:#fca5a5; } .kpi-flat { color:var(--muted); }
         .dash-grid-2 { display:grid; grid-template-columns:3fr 2fr; gap:16px; }
-        .dash-section-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin-bottom:10px; margin-top:4px; }
+        .dash-section-label { font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); margin-bottom:10px; margin-top:4px; font-family:'JetBrains Mono',monospace; }
         .dash-stat-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; }
         .dash-stat-row { display:grid; gap:8px; margin-bottom:10px; }
         .dash-stat { text-align:center; }
         .dash-stat .sv { font-size:22px; font-weight:800; color:var(--text); line-height:1.1; }
         .dash-stat .sl { font-size:11px; color:var(--muted); margin-top:3px; }
         .launch-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
-        .launch-card-d { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 14px; cursor:pointer; transition:border-color 0.15s; }
+        .launch-card-d { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; cursor:pointer; transition:border-color 0.15s, background 0.15s; }
         .launch-card-d:hover { border-color:var(--brand); }
         .launch-card-d .lc-name { font-weight:600; font-size:13px; margin-bottom:8px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
         .launch-card-d .lc-dates { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
@@ -326,9 +361,9 @@
         .lc-date-chip span { color:var(--text); font-weight:600; }
 
         /* ── ACTIVATION TRACKING ── */
-        .act-tableau-tile { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
-        .act-tableau-tile .kpi-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin-bottom:8px; }
-        .act-tableau-tile .kpi-value { font-size:26px; font-weight:800; color:var(--text); line-height:1.1; }
+        .act-tableau-tile { background:var(--surface); border:1px solid var(--border); border-top:2px solid var(--brand); border-radius:10px; padding:16px 18px; }
+        .act-tableau-tile .kpi-label { font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:8px; font-family:'JetBrains Mono',monospace; }
+        .act-tableau-tile .kpi-value { font-size:26px; font-weight:800; color:var(--text); line-height:1.1; letter-spacing:-0.02em; }
         .act-tableau-tile .kpi-sub { font-size:12px; margin-top:6px; }
         .act-tableau-tile .kpi-subtext { font-size:11px; color:var(--muted); margin-top:8px; line-height:1.4; }
         .act-edit-grid { display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px; align-items:end; margin-bottom:10px; }
@@ -354,20 +389,35 @@
         .pu-detail-item .value { font-size:13px; color:var(--text); }
         .pu-description { background:var(--surface); border-radius:6px; padding:12px; font-size:13px; line-height:1.6; color:var(--text); white-space:pre-wrap; }
         .pu-recent-header { display:grid; grid-template-columns:16px 2fr 120px 110px 140px 90px 90px 90px 90px; gap:10px; align-items:center; padding:4px 14px 6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); }
-        .pu-recent-card { display:grid; grid-template-columns:16px 2fr 120px 110px 140px 90px 90px 90px 90px; gap:10px; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px; cursor:pointer; transition:border-color 0.15s; }
+        .pu-recent-card { display:grid; grid-template-columns:16px 2fr 120px 110px 140px 90px 90px 90px 90px; gap:10px; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px; cursor:pointer; transition:border-color 0.15s, background 0.15s; }
         .pu-recent-card:hover { border-color:var(--brand); }
         .pu-recent-card.is-new { border-left:3px solid var(--brand); }
         .pu-recent-name { font-weight:600; font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .pu-recent-meta { font-size:12px; color:var(--muted); white-space:nowrap; }
         .pu-new-pill { font-size:10px; font-weight:700; background:var(--brand); color:#fff; border-radius:4px; padding:1px 5px; width:16px; text-align:center; }
+        .coverage-signal-card { background: var(--surface); border: 1px solid var(--border); border-radius:10px; padding:20px 22px; }
+        .coverage-signal-card .sig-label { font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:10px; font-family:'JetBrains Mono',monospace; }
+        .coverage-signal-card .sig-count { font-size:38px; font-weight:800; letter-spacing:-0.03em; line-height:1.1; }
+        .coverage-signal-card .sig-angle { font-size:12px; color:var(--muted); margin-top:10px; line-height:1.6; border-top:1px solid var(--border); padding-top:10px; }
+        .urgency-high { border-top: 2px solid var(--accent); }
+        .urgency-medium { border-top: 2px solid var(--brand); }
     </style>
 </head>
 <body>
 
+<!-- Film grain texture overlay -->
+<svg id="grain" aria-hidden="true" focusable="false" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50;opacity:0.038;" xmlns="http://www.w3.org/2000/svg">
+    <filter id="noise-filter" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="linearRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="4" stitchTiles="stitch" result="noise"/>
+        <feColorMatrix type="saturate" values="0" in="noise"/>
+    </filter>
+    <rect width="100%" height="100%" filter="url(#noise-filter)"/>
+</svg>
+
 <header>
     <div style="display:flex;align-items:center;gap:12px;">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="36" height="36" style="flex-shrink:0;border-radius:7px;">
-            <defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs>
+            <defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#f97316"/></linearGradient></defs>
             <rect width="32" height="32" rx="7" fill="url(#hg)"/>
             <text x="16" y="22" font-family="system-ui,sans-serif" font-size="11" font-weight="800" fill="white" text-anchor="middle">CLM</text>
         </svg>
@@ -389,6 +439,7 @@
     <button data-tab="productupdates">Product Updates</button>
     <button data-tab="seriesreplies">Series Replies</button>
     <button data-tab="activation">Activation Tracking</button>
+    <button data-tab="coverage">Coverage Map</button>
 </nav>
 
 <main>
@@ -441,7 +492,7 @@
             </div>
             <div style="display:flex;flex-direction:column;gap:14px;">
                 <div>
-                    <div class="dash-section-label">A/B Tests Q1</div>
+                    <div class="dash-section-label">A/B Tests</div>
                     <div id="dash-ab-card" class="dash-stat-card"><div class="empty" style="padding:16px;">Loading…</div></div>
                 </div>
                 <div>
@@ -460,6 +511,7 @@
                     <button class="shipped-range-btn active" data-range="last-week">Last week</button>
                     <button class="shipped-range-btn" data-range="this-month">This month</button>
                     <button class="shipped-range-btn" data-range="last-month">Last month</button>
+                    <button class="shipped-range-btn" data-range="this-quarter">This quarter</button>
                     <button class="shipped-copy-btn" id="shipped-copy-btn" title="Copy list for Slack">Copy</button>
                 </div>
             </div>
@@ -684,10 +736,13 @@
         <h2>A/B Test Tracker</h2>
         <div class="inner-tabs">
             <button class="active" onclick="showABInner('ab-view', this)">Test Log</button>
-            <button onclick="showABInner('ab-form', this)">Log New Test</button>
+            <button onclick="showABInner('ab-insights', this)">Insights ✨</button>
         </div>
 
         <div id="ab-view">
+            <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+                <button class="btn btn-primary" onclick="openABAddModal()" style="font-size:13px;">+ Log New Test</button>
+            </div>
             <div class="card-flush">
                 <table>
                     <thead><tr><th>Test</th><th>Element</th><th>Variant A</th><th>A Open %</th><th>A Click %</th><th>Variant B</th><th>B Open %</th><th>B Click %</th><th>Winner</th><th>Stat Sig</th><th>Insight</th><th>Date</th></tr></thead>
@@ -696,39 +751,54 @@
             </div>
         </div>
 
-        <div id="ab-form" style="display:none;">
-            <div id="ab-alert"></div>
-            <div class="card">
-                <div class="grid-2">
-                    <div>
-                        <div class="field"><label>Test Name *</label><input id="ab-name" type="text" placeholder="e.g. Subject line test — Nov launch"></div>
-                        <div class="field"><label>Element Tested</label>
-                            <select id="ab-element">
-                                <option>Subject Line</option><option>Preview Text</option><option>CTA</option>
-                                <option>Send Time</option><option>Email Content</option><option>Sender Name</option><option>Offer</option>
-                            </select>
+        <div id="ab-insights" style="display:none;">
+            <!-- Stats strip (always shown) -->
+            <div class="dash-kpi-strip" style="margin-bottom:20px;">
+                <div class="dash-kpi"><div class="kpi-label">Total Tests</div><div class="kpi-value" id="lm-total">—</div></div>
+                <div class="dash-kpi"><div class="kpi-label">Stat Sig Results</div><div class="kpi-value" id="lm-statsig">—</div><div class="kpi-sub" style="color:var(--muted);">conclusive wins</div></div>
+                <div class="dash-kpi"><div class="kpi-label">Avg Winner Lift</div><div class="kpi-value" id="lm-avg-lift">—</div><div class="kpi-sub" style="color:var(--muted);">pp on primary metric</div></div>
+                <div class="dash-kpi"><div class="kpi-label">Most Tested</div><div class="kpi-value" id="lm-top-element" style="font-size:16px;line-height:1.3;">—</div><div class="kpi-sub" style="color:var(--muted);" id="lm-top-element-sub"></div></div>
+            </div>
+
+            <!-- Empty state -->
+            <div id="lm-empty" style="display:none;">
+                <div class="card" style="text-align:center;padding:40px 20px;">
+                    <p style="font-size:15px;font-weight:600;margin-bottom:8px;">Log at least 3 A/B tests to unlock insights</p>
+                    <p style="color:var(--muted);font-size:13px;">The Learning Machine analyses patterns across your test history to surface what's working, what's missing, and what to test next.</p>
+                </div>
+            </div>
+
+            <!-- Main content -->
+            <div id="lm-content" style="display:none;">
+                <!-- Pattern Analysis card -->
+                <div class="report-section">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+                        <div>
+                            <div class="dash-section-label" style="margin-bottom:4px;">Pattern Analysis</div>
+                            <p style="font-size:12px;color:var(--muted);">AI-synthesised learnings from your full test history</p>
                         </div>
-                        <div class="field"><label>Hypothesis</label><textarea id="ab-hyp" placeholder="e.g. A curiosity-gap subject will outperform a benefit-led one for this segment"></textarea></div>
-                        <div class="field"><label>Test Date</label><input id="ab-date" type="date"></div>
-                        <div class="field"><label>Winner</label>
-                            <select id="ab-winner"><option value="A">A</option><option value="B">B</option><option value="N">No clear winner</option></select>
-                        </div>
-                        <div class="field"><label>What did you learn?</label><textarea id="ab-insight" placeholder="e.g. Curiosity-gap outperformed by 4pp on opens — will apply to future launches"></textarea></div>
+                        <button class="btn-sm" onclick="generateLearnings(true)" title="Re-run analysis" style="font-size:11px;flex-shrink:0;margin-left:12px;">↻ Refresh</button>
                     </div>
-                    <div>
-                        <p style="font-weight:700;margin-bottom:12px;">Variant A</p>
-                        <div class="field"><label>Describe Variant A</label><input id="ab-a-name" type="text" placeholder="e.g. Benefit-led"></div>
-                        <div class="field"><label>Variant A Content</label><textarea id="ab-a-content" placeholder="e.g. The subject line, CTA copy, or other content used in Variant A"></textarea></div>
-                        <div class="field"><label>A Open Rate (%)</label><input id="ab-a-open" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
-                        <div class="field"><label>A Click Rate (%)</label><input id="ab-a-click" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
-                        <p style="font-weight:700;margin:16px 0 12px;">Variant B</p>
-                        <div class="field"><label>Describe Variant B</label><input id="ab-b-name" type="text" placeholder="e.g. Curiosity-gap"></div>
-                        <div class="field"><label>Variant B Content</label><textarea id="ab-b-content" placeholder="e.g. The subject line, CTA copy, or other content used in Variant B"></textarea></div>
-                        <div class="field"><label>B Open Rate (%)</label><input id="ab-b-open" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
-                        <div class="field"><label>B Click Rate (%)</label><input id="ab-b-click" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                    <div id="lm-analysis-output">
+                        <button class="btn btn-primary" onclick="generateLearnings()" style="font-size:13px;">✨ Generate Insights</button>
                     </div>
                 </div>
-                <button class="btn btn-primary" onclick="saveABTest()">Save Test</button>
+
+                <!-- Ask card -->
+                <div class="report-section">
+                    <div class="dash-section-label" style="margin-bottom:12px;">Ask the Learning Machine</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+                        <button class="sr-prompt-chip" onclick="lmQuickAsk('Subject line patterns')">Subject line patterns</button>
+                        <button class="sr-prompt-chip" onclick="lmQuickAsk('Proven hypotheses')">Proven hypotheses</button>
+                        <button class="sr-prompt-chip" onclick="lmQuickAsk('What should we test next?')">What should we test next?</button>
+                        <button class="sr-prompt-chip" onclick="lmQuickAsk('CTA performance')">CTA performance</button>
+                    </div>
+                    <div class="field" style="margin-bottom:10px;">
+                        <textarea id="lm-question" placeholder="Ask anything about your test history…" style="min-height:60px;"></textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="askLearningMachine()" style="font-size:13px;">Ask</button>
+                    <div id="lm-qa-output" style="margin-top:16px;"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -885,34 +955,31 @@
 
     <!-- SERIES REPLIES -->
     <div id="tab-seriesreplies" class="tab-content">
-        <div style="margin-bottom:20px;">
+        <div style="margin-bottom:24px;">
             <h2 style="margin-bottom:4px;">Series Replies</h2>
-            <p style="color:var(--muted);font-size:13px;margin:0;">Explore customer replies to your campaigns and ask Claude about themes, sentiment, or concerns.</p>
+            <p style="color:var(--muted);font-size:13px;margin:0;">Paste a subject line to find customer replies, then ask Claude about themes, sentiment, or concerns.</p>
         </div>
 
-        <!-- Recent sends -->
-        <div id="sr-recent-wrap" style="margin-bottom:24px;">
-            <div class="dash-section-label" style="margin-bottom:10px;">Recent sends — click to explore replies</div>
-            <div id="sr-recent-list" style="display:flex;flex-wrap:wrap;gap:8px;">
-                <div style="font-size:13px;color:var(--muted);">Loading recent campaigns…</div>
-            </div>
-        </div>
-
-        <!-- Search (secondary) -->
-        <div class="dash-section-label" style="margin-bottom:10px;">Or search by subject / sender</div>
-        <div class="card" style="padding:16px;margin-bottom:20px;">
+        <!-- Search -->
+        <div class="card" style="padding:20px;margin-bottom:16px;">
             <div style="display:flex;gap:10px;align-items:center;">
-                <input id="sr-query" type="text" placeholder="Search by subject or sender name…" style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;outline:none;" onkeydown="if(event.key==='Enter') searchSeries()" />
-                <select id="sr-recency" style="padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;outline:none;cursor:pointer;">
+                <input id="sr-query" type="text" placeholder="Paste a subject line…" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;outline:none;" onkeydown="if(event.key==='Enter') searchSeries()" />
+                <select id="sr-recency" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;outline:none;cursor:pointer;">
                     <option value="">Any time</option>
                     <option value="7">Last 7 days</option>
-                    <option value="30" selected>Last 30 days</option>
+                    <option value="30">Last 30 days</option>
                     <option value="60">Last 60 days</option>
                     <option value="90">Last 90 days</option>
                 </select>
                 <button class="btn btn-primary" onclick="searchSeries()" id="sr-search-btn">Search</button>
             </div>
             <div id="sr-search-status" style="margin-top:8px;font-size:12px;color:var(--muted);min-height:18px;"></div>
+        </div>
+
+        <!-- Recent searches (localStorage history) -->
+        <div id="sr-history-wrap" style="margin-bottom:24px;display:none;">
+            <div class="dash-section-label" style="margin-bottom:8px;">Recent searches</div>
+            <div id="sr-history-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
         </div>
 
         <!-- Source message results -->
@@ -1049,6 +1116,27 @@
         <div id="act-trend" class="card" style="padding:20px 24px;"></div>
     </div>
 
+<!-- COVERAGE MAP -->
+<div id="tab-coverage" class="tab-content">
+    <h2>Lifecycle Coverage Map</h2>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:24px;">
+        Live product signals from Snowflake — workspaces showing gaps in their Fin adoption that lifecycle emails can address.
+    </p>
+    <div id="coverage-signals">
+        <div style="color:var(--muted);font-size:13px;">Loading signals…</div>
+    </div>
+    <div class="report-section" style="margin-top:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+            <div>
+                <div class="dash-section-label" style="margin-bottom:4px;">Coverage Analysis</div>
+                <p style="font-size:12px;color:var(--muted);">Claude reads your signal counts + campaign history and identifies what's being served and what isn't.</p>
+            </div>
+            <button id="coverage-gen-btn" class="btn btn-primary" onclick="generateCoverageAnalysis()" style="font-size:13px;flex-shrink:0;margin-left:12px;">✨ Generate Coverage Analysis</button>
+        </div>
+        <div id="coverage-analysis-output"></div>
+    </div>
+</div>
+
 </main>
 
 <!-- SERIES REPLY TOOLTIP -->
@@ -1082,6 +1170,48 @@
 <div id="ab-modal">
     <div class="card">
         <div id="ab-modal-content"></div>
+    </div>
+</div>
+
+<!-- LOG A/B TEST MODAL -->
+<div id="ab-add-modal-overlay" onclick="closeABAddModal()"></div>
+<div id="ab-add-modal">
+    <div class="card">
+        <div class="cm-header">
+            <span class="cm-title">Log A/B Test</span>
+            <button class="cm-close" onclick="closeABAddModal()">&#x2715;</button>
+        </div>
+        <div id="ab-alert"></div>
+        <div class="grid-2">
+            <div>
+                <div class="field"><label>Test Name *</label><input id="ab-name" type="text" placeholder="e.g. Subject line test — Nov launch"></div>
+                <div class="field"><label>Element Tested</label>
+                    <select id="ab-element">
+                        <option>Subject Line</option><option>Preview Text</option><option>CTA</option>
+                        <option>Send Time</option><option>Email Content</option><option>Sender Name</option><option>Offer</option>
+                    </select>
+                </div>
+                <div class="field"><label>Hypothesis</label><textarea id="ab-hyp" placeholder="e.g. A curiosity-gap subject will outperform a benefit-led one for this segment"></textarea></div>
+                <div class="field"><label>Test Date</label><input id="ab-date" type="date"></div>
+                <div class="field"><label>Winner</label>
+                    <select id="ab-winner"><option value="A">A</option><option value="B">B</option><option value="N">No clear winner</option></select>
+                </div>
+                <div class="field"><label>What did you learn?</label><textarea id="ab-insight" placeholder="e.g. Curiosity-gap outperformed by 4pp on opens — will apply to future launches"></textarea></div>
+            </div>
+            <div>
+                <p style="font-weight:700;margin-bottom:12px;">Variant A</p>
+                <div class="field"><label>Describe Variant A</label><input id="ab-a-name" type="text" placeholder="e.g. Benefit-led"></div>
+                <div class="field"><label>Variant A Content</label><textarea id="ab-a-content" placeholder="e.g. The subject line, CTA copy, or other content used in Variant A"></textarea></div>
+                <div class="field"><label>A Open Rate (%)</label><input id="ab-a-open" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                <div class="field"><label>A Click Rate (%)</label><input id="ab-a-click" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                <p style="font-weight:700;margin:16px 0 12px;">Variant B</p>
+                <div class="field"><label>Describe Variant B</label><input id="ab-b-name" type="text" placeholder="e.g. Curiosity-gap"></div>
+                <div class="field"><label>Variant B Content</label><textarea id="ab-b-content" placeholder="e.g. The subject line, CTA copy, or other content used in Variant B"></textarea></div>
+                <div class="field"><label>B Open Rate (%)</label><input id="ab-b-open" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+                <div class="field"><label>B Click Rate (%)</label><input id="ab-b-click" type="number" placeholder="0.0" step="0.1" min="0" max="100"></div>
+            </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveABTest()" style="margin-top:4px;">Save Test</button>
     </div>
 </div>
 
@@ -1214,14 +1344,26 @@ document.querySelectorAll('nav button').forEach(btn => {
         if (btn.dataset.tab === 'productupdates') loadProductUpdates();
         if (btn.dataset.tab === 'seriesreplies')  loadSRRecentCampaigns();
         if (btn.dataset.tab === 'activation')     loadActivation();
+        if (btn.dataset.tab === 'coverage')       loadCoverageMap();
     });
 });
 
 function showABInner(id, btn) {
-    ['ab-view','ab-form'].forEach(i => document.getElementById(i).style.display = 'none');
+    ['ab-view','ab-insights'].forEach(i => document.getElementById(i).style.display = 'none');
     btn.closest('.inner-tabs').querySelectorAll('button').forEach(b => b.classList.remove('active'));
     document.getElementById(id).style.display = 'block';
     btn.classList.add('active');
+    if (id === 'ab-insights') showLearningMachine();
+}
+
+function openABAddModal() {
+    document.getElementById('ab-add-modal-overlay').style.display = 'block';
+    document.getElementById('ab-add-modal').style.display = 'block';
+}
+
+function closeABAddModal() {
+    document.getElementById('ab-add-modal-overlay').style.display = 'none';
+    document.getElementById('ab-add-modal').style.display = 'none';
 }
 
 function showSwipeInner(id, btn) {
@@ -1256,7 +1398,7 @@ async function loadDashboard() {
         db.from('lifecycle_campaigns').select('*').order('send_date', { ascending: false }).gte('send_date', '2026-02-01'),
         db.from('lifecycle_campaigns').select('emails_sent,emails_sent_b,open_rate,click_rate,click_to_open_rate,parent_campaign').gte('send_date', '2025-11-01').lt('send_date', '2026-02-01'),
         db.from('lifecycle_campaigns').select('category,open_rate,click_rate,click_to_open_rate,emails_sent'),
-        db.from('lifecycle_ab_tests').select('test_id,test_name,winner,test_date,variant_a_name,variant_b_name').gte('test_date', '2026-02-01').order('test_date', { ascending: false }),
+        db.from('lifecycle_ab_tests').select('test_id,test_name,winner,winner_notes,test_date,element_tested,variant_a_name,variant_b_name,variant_a_open_rate,variant_b_open_rate,variant_a_click_rate,variant_b_click_rate,sent_a,sent_b').order('test_date', { ascending: false }),
         db.from('lifecycle_experiment_backlog').select('id,status'),
         db.from('lifecycle_campaigns').select('send_date,open_rate,click_rate,click_to_open_rate,emails_sent,emails_sent_b').gte('send_date', '2025-10-01').not('open_rate', 'is', null),
     ]);
@@ -1449,20 +1591,24 @@ function renderTopPerformers(q1) {
 }
 
 function renderABSummary(tests) {
-    const total      = tests.length;
-    const withWinner = tests.filter(t => t.winner && t.winner !== 'N').length;
-    const winRate    = total > 0 ? Math.round(withWinner / total * 100) : null;
-    const latest     = tests[0];
+    const total   = tests.length;
+    // A win is only "confirmed" if statistically significant (same logic the test log uses)
+    const confirmed = tests.filter(t => {
+        const ss = calcStatSig(t);
+        return ss && ss.significant;
+    }).length;
+    const inconclusive = total - confirmed;
+    const latest = tests[0];
     document.getElementById('dash-ab-card').innerHTML = `
         <div class="dash-stat-row" style="grid-template-columns:repeat(3,1fr);">
             <div class="dash-stat"><div class="sv">${total}</div><div class="sl">Tests Run</div></div>
-            <div class="dash-stat"><div class="sv">${withWinner}</div><div class="sl">Winners Found</div></div>
-            <div class="dash-stat"><div class="sv">${winRate != null ? winRate + '%' : '—'}</div><div class="sl">Win Rate</div></div>
+            <div class="dash-stat"><div class="sv">${confirmed}</div><div class="sl">Stat. Sig. Wins</div></div>
+            <div class="dash-stat"><div class="sv">${inconclusive}</div><div class="sl">Inconclusive</div></div>
         </div>
-        ${total === 0 ? `<div style="font-size:12px;color:var(--muted);">No A/B tests logged this quarter yet.</div>` :
+        ${total === 0 ? `<div style="font-size:12px;color:var(--muted);">No A/B tests logged yet.</div>` :
           latest ? `<div style="font-size:12px;color:var(--muted);border-top:1px solid var(--border);padding-top:10px;">
             Latest: <span style="color:var(--text);font-weight:600;">${latest.test_name}</span>
-            ${latest.winner && latest.winner !== 'N' ? `<span style="color:#4ade80;margin-left:6px;">✓ Variant ${latest.winner} won</span>` : '<span style="color:var(--muted);margin-left:6px;">No winner yet</span>'}
+            ${(() => { const ss = calcStatSig(latest); return ss && ss.significant ? `<span style="color:#4ade80;margin-left:6px;">✓ Stat. sig. winner</span>` : `<span style="color:#fcd34d;margin-left:6px;">Not stat. sig.</span>`; })()}
           </div>` : ''}`;
 }
 
@@ -1559,6 +1705,18 @@ function getShippedDateRange(range) {
         const from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
         const to   = new Date(today.getFullYear(), today.getMonth(), 0);
         return { from: fmt(from), to: fmt(to), label: CAL_MONTHS[from.getMonth()] + ' ' + from.getFullYear() };
+    }
+    if (range === 'this-quarter') {
+        // Intercom fiscal quarters: Q1 Feb–Apr, Q2 May–Jul, Q3 Aug–Oct, Q4 Nov–Jan
+        const m = today.getMonth(); // 0-indexed
+        let qStart, qEnd, qLabel;
+        if (m >= 1 && m <= 3)       { qStart = new Date(today.getFullYear(), 1, 1);  qEnd = new Date(today.getFullYear(), 3, 30);  qLabel = 'Q1'; }
+        else if (m >= 4 && m <= 6)  { qStart = new Date(today.getFullYear(), 4, 1);  qEnd = new Date(today.getFullYear(), 6, 31);  qLabel = 'Q2'; }
+        else if (m >= 7 && m <= 9)  { qStart = new Date(today.getFullYear(), 7, 1);  qEnd = new Date(today.getFullYear(), 9, 31);  qLabel = 'Q3'; }
+        else                        { qStart = m >= 10 ? new Date(today.getFullYear(), 10, 1) : new Date(today.getFullYear() - 1, 10, 1);
+                                      qEnd   = m >= 10 ? new Date(today.getFullYear() + 1, 0, 31) : new Date(today.getFullYear(), 0, 31);
+                                      qLabel = 'Q4'; }
+        return { from: fmt(qStart), to: fmt(qEnd), label: `${qLabel} FY${String(qEnd.getFullYear()).slice(-2)}` };
     }
 }
 
@@ -2096,6 +2254,11 @@ function showCampaignModal(c) {
         ${priority     ? `<div class="cm-row"><span class="cm-label">Priority</span>   <span class="cm-value">${priority}</span></div>` : ''}
         ${quarter      ? `<div class="cm-row"><span class="cm-label">Quarter</span>    <span class="cm-value">${quarter}</span></div>` : ''}
         ${status       ? `<div class="cm-row"><span class="cm-label">Status</span>     <span class="cm-value">${status}</span></div>` : ''}
+        <div class="cm-row" style="align-items:flex-start;">
+            <span class="cm-label" style="padding-top:6px;">Subject</span>
+            <input id="mf-subject-line" type="text" placeholder="Add subject line…" value="${escHtml(c.subject_line || '')}"
+                style="flex:1;background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:13px;color:var(--text);outline:none;">
+        </div>
         <hr class="cm-divider">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <strong style="font-size:13px;">Performance Metrics</strong>
@@ -2402,6 +2565,9 @@ async function saveMetrics() {
             bounce_rate:        (sent && bncd)     ? bncd    / sent   : null,
         };
     }
+
+    const subjectVal = document.getElementById('mf-subject-line')?.value.trim() || null;
+    if (subjectVal !== null) update.subject_line = subjectVal || null;
 
     const btn = document.getElementById('mf-save-btn');
     btn.textContent = 'Saving...';
@@ -3520,6 +3686,105 @@ function addSuggestionToBacklog(idx) {
 let _abModalTests = [];
 let _abModalTestId = null;
 
+// ── LEARNING MACHINE ──────────────────────────────────────────────────────────
+let lmAnalysisCache = null;
+let lmAnalysisCacheCount = 0;
+
+async function showLearningMachine() {
+    if (!_abModalTests.length) await loadABTests();
+    const tests = _abModalTests;
+    const total = tests.length;
+
+    // Stat sig wins — same calc as test log's Stat Sig column
+    const statSigWins = tests.filter(t => { const ss = calcStatSig(t); return ss && ss.significant; }).length;
+
+    // Avg winner lift — average pp improvement on the primary metric across tests with a detectable winner
+    const lifts = tests.map(t => autoDetectWinner(t)).filter(aw => aw.diff > 0).map(aw => aw.diff * 100);
+    const avgLift = lifts.length > 0 ? (lifts.reduce((a, b) => a + b, 0) / lifts.length).toFixed(1) : null;
+
+    // Most tested element
+    const elementCounts = {};
+    tests.forEach(t => { const el = t.element_tested || 'Unknown'; elementCounts[el] = (elementCounts[el] || 0) + 1; });
+    const topElement = Object.entries(elementCounts).sort((a, b) => b[1] - a[1])[0];
+
+    document.getElementById('lm-total').textContent    = total;
+    document.getElementById('lm-statsig').textContent  = statSigWins;
+    document.getElementById('lm-avg-lift').textContent = avgLift ? `+${avgLift}` : '—';
+    document.getElementById('lm-top-element').textContent     = topElement ? topElement[0] : '—';
+    document.getElementById('lm-top-element-sub').textContent = topElement ? `${topElement[1]} test${topElement[1] !== 1 ? 's' : ''}` : '';
+
+    if (total < 3) {
+        document.getElementById('lm-empty').style.display   = 'block';
+        document.getElementById('lm-content').style.display = 'none';
+        return;
+    }
+
+    document.getElementById('lm-empty').style.display   = 'none';
+    document.getElementById('lm-content').style.display = 'block';
+
+    if (lmAnalysisCache && lmAnalysisCacheCount === total) {
+        document.getElementById('lm-analysis-output').innerHTML = lmAnalysisCache;
+        return;
+    }
+    generateLearnings();
+}
+
+async function generateLearnings(force = false) {
+    const tests = _abModalTests;
+    if (!tests.length) return;
+    const out = document.getElementById('lm-analysis-output');
+    out.innerHTML = `<div style="color:var(--muted);font-size:13px;">✨ Analysing ${tests.length} test${tests.length !== 1 ? 's' : ''}…</div>`;
+    try {
+        const r = await fetch('/api/claude-learning', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tests }),
+        });
+        const { analysis, error } = await r.json();
+        if (!analysis) throw new Error(error || 'Empty response');
+        const html = lmRenderOutput(analysis);
+        out.innerHTML = html;
+        lmAnalysisCache = html;
+        lmAnalysisCacheCount = tests.length;
+    } catch (e) {
+        out.innerHTML = `<span style="color:var(--muted);font-size:13px;">Could not generate insights: ${e.message}</span>
+            <button class="btn-sm" onclick="generateLearnings()" style="margin-top:8px;display:block;">Retry</button>`;
+    }
+}
+
+async function askLearningMachine() {
+    const question = document.getElementById('lm-question').value.trim();
+    if (!question) return;
+    const tests = _abModalTests;
+    if (!tests.length) return;
+    const out = document.getElementById('lm-qa-output');
+    out.innerHTML = `<div style="color:var(--muted);font-size:13px;">Thinking…</div>`;
+    try {
+        const r = await fetch('/api/claude-learning', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tests, question }),
+        });
+        const { analysis, error } = await r.json();
+        if (!analysis) throw new Error(error || 'Empty response');
+        out.innerHTML = lmRenderOutput(analysis);
+    } catch (e) {
+        out.innerHTML = `<span style="color:var(--muted);font-size:13px;">Error: ${e.message}</span>`;
+    }
+}
+
+function lmQuickAsk(q) {
+    document.getElementById('lm-question').value = q;
+    askLearningMachine();
+}
+
+function lmRenderOutput(text) {
+    return text.split('\n\n').map(p => {
+        const formatted = p.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        return `<p style="margin-bottom:12px;font-size:13px;line-height:1.75;">${formatted}</p>`;
+    }).join('');
+}
+
 async function loadABTests() {
     const { data } = await db.from('lifecycle_ab_tests').select('*').order('test_date', { ascending: false });
     _abModalTests = data || [];
@@ -3758,10 +4023,11 @@ async function saveABTest() {
     });
 
     if (error) { showAlert('ab-alert', 'Error: ' + error.message, 'error'); return; }
-    showAlert('ab-alert', 'Test saved!');
     loadABTests();
-    showABInner('ab-view', document.querySelector('#tab-abtests .inner-tabs button'));
-    document.querySelectorAll('#ab-form input, #ab-form textarea, #ab-form select').forEach(el => el.value = '');
+    closeABAddModal();
+    document.querySelectorAll('#ab-add-modal input, #ab-add-modal textarea').forEach(el => el.value = '');
+    document.getElementById('ab-winner').value = 'A';
+    document.getElementById('ab-element').value = 'Subject Line';
 }
 
 // ── REPORT GENERATOR ──────────────────────────────────────────────────────────
@@ -4831,55 +5097,44 @@ let _srSources = [];      // search results (unique source messages)
 let _srReplies = [];      // replies for selected source
 let _srSourceCtx = '';    // selected source context string
 
-async function loadSRRecentCampaigns() {
-    const wrap = document.getElementById('sr-recent-list');
-    if (!wrap) return;
 
-    const today = new Date().toISOString().slice(0, 10);
-    const { data } = await db.from('lifecycle_campaigns')
-        .select('campaign_id, campaign_name, subject_line, category, send_date')
-        .not('send_date', 'is', null)
-        .lte('send_date', today)
-        .order('send_date', { ascending: false })
-        .limit(10);
+function loadSRRecentCampaigns() {
+    renderSRHistory();
+}
 
-    const recent = data || [];
+function srGetHistory() {
+    try { return JSON.parse(localStorage.getItem('sr_search_history') || '[]'); } catch (_) { return []; }
+}
 
-    if (!recent.length) {
-        wrap.innerHTML = '<div style="font-size:13px;color:var(--muted);">No recent campaigns found.</div>';
-        return;
-    }
+function srSaveToHistory(query) {
+    const q = query.trim();
+    if (!q) return;
+    let history = srGetHistory().filter(h => h !== q);
+    history.unshift(q);
+    history = history.slice(0, 10);
+    try { localStorage.setItem('sr_search_history', JSON.stringify(history)); } catch (_) {}
+}
 
-    wrap.innerHTML = recent.map(c => {
-        const cls = (c.category || '').replace(/[\s-]/g, '').replace(/[^a-zA-Z]/g, '') || 'default';
-        const name = escHtml(c.campaign_name || '');
-        const subj = c.subject_line ? escHtml(c.subject_line) : '';
-        const date = c.send_date ? fmtDate(c.send_date) : '';
-        const searchTerm = (c.subject_line || c.campaign_name || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
-        const nameEsc = (c.campaign_name || '').replace(/'/g, "\\'");
-        return `<button class="sr-recent-chip" onclick="srQuickSearch('${searchTerm}', '${nameEsc}')">
-            <span class="sr-recent-chip-name">${name}</span>
-            ${subj ? `<span class="sr-recent-chip-sub" style="font-style:italic;">"${subj}"</span>` : ''}
-            <span class="sr-recent-chip-sub"><span class="shipped-pill cal-event-${cls}" style="font-size:9px;padding:1px 5px;vertical-align:middle;">${escHtml(c.category || '')}</span> ${date}</span>
+function renderSRHistory() {
+    const history = srGetHistory();
+    const wrap = document.getElementById('sr-history-wrap');
+    const list = document.getElementById('sr-history-list');
+    if (!wrap || !list) return;
+    if (!history.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    list.innerHTML = history.map(h => {
+        const safe = h.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `<button class="sr-recent-chip" onclick="srHistoryClick('${safe}', this)" style="width:auto;padding:6px 12px;">
+            <span class="sr-recent-chip-name" style="font-size:12px;">${escHtml(h)}</span>
         </button>`;
     }).join('');
 }
 
-async function srQuickSearch(query, label) {
-    // Highlight the clicked chip
+function srHistoryClick(subject, btn) {
     document.querySelectorAll('.sr-recent-chip').forEach(b => b.classList.remove('active'));
-    event.currentTarget.classList.add('active');
-
-    document.getElementById('sr-query').value = query;
-    document.getElementById('sr-recency').value = '30';
-    document.getElementById('sr-search-status').textContent = `Searching for "${label}"…`;
-    document.getElementById('sr-sources').style.display = 'none';
-    document.getElementById('sr-replies-panel').style.display = 'none';
-
-    // Scroll search bar into view
-    document.getElementById('sr-query').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    await searchSeries();
+    btn.classList.add('active');
+    document.getElementById('sr-query').value = subject;
+    searchSeries({ exact: true });
 }
 
 function setSRPrompt(btn) {
@@ -4888,7 +5143,7 @@ function setSRPrompt(btn) {
     document.getElementById('sr-question').value = btn.textContent;
 }
 
-async function searchSeries() {
+async function searchSeries(opts = {}) {
     const query = document.getElementById('sr-query').value.trim();
     if (!query || query.length < 2) {
         document.getElementById('sr-search-status').textContent = 'Please enter at least 2 characters.';
@@ -4909,10 +5164,13 @@ async function searchSeries() {
         const res = await fetch('/api/intercom-series', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: 'search', query, since }),
+            body: JSON.stringify({ mode: 'search', query, since, exact: opts.exact || false }),
         });
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error || 'Search failed');
+
+        srSaveToHistory(query);
+        renderSRHistory();
 
         _srSources = data.sources || [];
         document.getElementById('sr-search-status').textContent =
@@ -5793,6 +6051,71 @@ function renderActTrendChart(hist) {
             <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;background:#818cf8;border-radius:2px;flex-shrink:0;"></span>Avg open rate</span>
             <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;background:#4ade80;border-radius:2px;flex-shrink:0;"></span>Avg click rate</span>
         </div>`;
+}
+
+// ── COVERAGE MAP ──────────────────────────────────────────────────────────────
+let _coverageSignalsCache = null;
+
+async function loadCoverageMap() {
+    if (_coverageSignalsCache) { renderSignalCards(_coverageSignalsCache); return; }
+    document.getElementById('coverage-signals').innerHTML =
+        `<div style="color:var(--muted);font-size:13px;">Loading signals from Snowflake…</div>`;
+    try {
+        const r = await fetch('/api/lifecycle-signals');
+        const json = await r.json();
+        if (json.setupRequired) {
+            document.getElementById('coverage-signals').innerHTML =
+                `<div class="alert alert-info">Snowflake not connected — add <code>SNOWFLAKE_PRIVATE_KEY</code> to Vercel environment variables.</div>`;
+            return;
+        }
+        if (json.error) throw new Error(json.error);
+        _coverageSignalsCache = json.signals;
+        renderSignalCards(json.signals);
+    } catch(e) {
+        document.getElementById('coverage-signals').innerHTML =
+            `<div style="color:#f87171;font-size:13px;">Could not load signals: ${e.message}</div>`;
+    }
+}
+
+function renderSignalCards(signals) {
+    document.getElementById('coverage-signals').innerHTML =
+        `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
+            ${signals.map(s => `
+            <div class="coverage-signal-card urgency-${s.urgency}">
+                <div class="sig-label">${s.label}</div>
+                <div class="sig-count" style="color:${s.urgency === 'high' ? 'var(--accent)' : 'var(--brand)'};">
+                    ${Number(s.count).toLocaleString()}
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">workspaces</div>
+                <div style="font-size:13px;color:var(--text);">${s.description}</div>
+                <div class="sig-angle">${s.lifecycle_angle}</div>
+            </div>`).join('')}
+        </div>`;
+}
+
+async function generateCoverageAnalysis() {
+    const btn = document.getElementById('coverage-gen-btn');
+    const out = document.getElementById('coverage-analysis-output');
+    if (!_coverageSignalsCache) { out.innerHTML = `<span style="color:var(--muted);font-size:13px;">Load signals first.</span>`; return; }
+    btn.textContent = 'Analysing…'; btn.disabled = true;
+    out.innerHTML = `<div style="color:var(--muted);font-size:13px;">Reading signals and campaign history…</div>`;
+    try {
+        const { data: campaigns } = await db.from('lifecycle_campaigns')
+            .select('campaign_name,category,send_date,open_rate,notes')
+            .order('send_date', { ascending: false }).limit(60);
+        const r = await fetch('/api/claude-coverage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ signals: _coverageSignalsCache, campaigns: campaigns || [] }),
+        });
+        const { analysis, error } = await r.json();
+        if (!analysis) throw new Error(error || 'Empty response');
+        out.innerHTML = lmRenderOutput(analysis);
+    } catch(e) {
+        out.innerHTML = `<span style="color:var(--muted);font-size:13px;">Error: ${e.message}</span>`;
+    } finally {
+        btn.textContent = '✨ Generate Coverage Analysis'; btn.disabled = false;
+    }
 }
 </script>
 <div id="spark-tip" style="position:fixed;background:#0f172a;border:1px solid #334155;border-radius:7px;padding:7px 11px;font-size:12px;color:#e2e8f0;pointer-events:none;display:none;z-index:9999;white-space:nowrap;line-height:1.4;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
