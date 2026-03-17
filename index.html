@@ -817,26 +817,20 @@
             <div id="r-mode-single">
                 <div class="grid-2" style="gap:12px;margin-bottom:14px;">
                     <div class="field" style="margin-bottom:0;">
-                        <label>Campaign</label>
+                        <label>Campaign <span style="font-weight:400;color:var(--muted);">— optional, for email metrics</span></label>
                         <select id="r-campaign"><option value="">Loading...</option></select>
                     </div>
                     <div class="field" style="margin-bottom:0;">
-                        <label>Feature to measure <span style="font-weight:400;color:var(--muted);">(optional &mdash; requires Snowflake)</span></label>
-                        <div id="ci-metric-wrap" style="position:relative;">
-                            <input type="text" id="ci-metric-search" placeholder="e.g. Fin AI agent conversations, suggestions…" autocomplete="off"
-                                style="width:100%;padding-right:28px;"
-                                oninput="filterCIMetrics(this.value)"
-                                onfocus="openCIDropdown()"
-                                onblur="setTimeout(closeCIDropdown,150)">
-                            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:12px;">&#9660;</span>
-                            <input type="hidden" id="ci-metric" value="">
-                            <div id="ci-metric-dropdown" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#1e293b;border:1px solid #334155;border-radius:6px;max-height:280px;overflow-y:auto;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);"></div>
-                        </div>
+                        <label>Intercom Series ID <span style="font-weight:400;color:var(--muted);">— optional &middot; find in URL: &hellip;/outbound/series/<strong style="color:var(--text);">XXXXXXXX</strong></span></label>
+                        <input type="number" id="ci-ruleset-id" placeholder="e.g. 57652582">
                     </div>
                 </div>
-                <div class="field" style="margin-bottom:14px;">
-                    <label>Series / Ruleset ID <span style="font-weight:400;color:var(--muted);">— optional &middot; find in Intercom URL: &hellip;/outbound/series/<strong style="color:var(--text);">XXXXXXXX</strong></span></label>
-                    <input type="number" id="ci-ruleset-id" placeholder="e.g. 57652582" style="max-width:220px;">
+                <div class="field" style="margin-bottom:0;">
+                    <label>Analytics question</label>
+                    <textarea id="ci-analytics-request" rows="3"
+                        placeholder="e.g. How many workspaces that received this series have activated Fin? What % have Fin guidance set up? How has Fin resolution rate changed in the last 30 days?"
+                        style="width:100%;resize:vertical;font-size:13px;"></textarea>
+                    <div style="font-size:11px;color:var(--muted);margin-top:6px;">Claude generates and runs a Snowflake query, then narrates the results.</div>
                 </div>
             </div>
 
@@ -4077,66 +4071,134 @@ function avgMetric(arr, field) {
 }
 
 async function analyzeFullCampaign() {
-    const id          = document.getElementById('r-campaign').value;
-    const rulesetId   = document.getElementById('ci-ruleset-id').value.trim();
-    const featureMetric = document.getElementById('ci-metric').value;
-    const type        = document.getElementById('r-type').value;
-    const btn         = document.getElementById('r-analyze-btn');
-    const statusEl    = document.getElementById('ci-status');
+    const campaignId       = document.getElementById('r-campaign').value;
+    const seriesId         = document.getElementById('ci-ruleset-id').value.trim();
+    const analyticsRequest = document.getElementById('ci-analytics-request').value.trim();
+    const btn              = document.getElementById('r-analyze-btn');
+    const statusEl         = document.getElementById('ci-status');
 
-    if (!id) { alert('Please select a campaign.'); return; }
+    if (!campaignId && !analyticsRequest) {
+        alert('Select a campaign or enter an analytics question.');
+        return;
+    }
 
     btn.disabled = true;
     btn.textContent = 'Analyzing…';
-    statusEl.textContent = rulesetId ? 'Fetching email data + querying Snowflake…' : 'Fetching campaign data…';
     document.getElementById('ci-setup-card').style.display = 'none';
     document.getElementById('ci-error').style.display      = 'none';
     document.getElementById('report-out').style.display    = 'none';
 
     try {
-        // Always fetch email data from Supabase; optionally fetch feature impact from Snowflake in parallel
-        const supabasePromises = Promise.all([
-            db.from('lifecycle_campaigns').select('*').eq('campaign_id', id).single(),
-            db.from('lifecycle_campaigns').select('open_rate, click_rate, click_to_open_rate, category').not('send_date', 'is', null),
-        ]);
-
-        let impactPromise = null;
-        if (rulesetId && featureMetric) {
-            impactPromise = fetch('/api/campaign-impact', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rulesetId, featureMetric }),
-            }).then(r => r.json());
+        // Fetch email metrics from Supabase if a campaign is selected
+        let emailData    = null;
+        let emailHistory = null;
+        if (campaignId) {
+            statusEl.textContent = 'Fetching email metrics…';
+            const [{ data: single }, { data: history }] = await Promise.all([
+                db.from('lifecycle_campaigns').select('*').eq('campaign_id', campaignId).single(),
+                db.from('lifecycle_campaigns').select('open_rate, click_rate, click_to_open_rate, category').not('send_date', 'is', null),
+            ]);
+            emailData    = single;
+            emailHistory = history;
         }
 
-        const [[{ data: single }, { data: allHistory }], impactRaw] = await Promise.all([
-            supabasePromises,
-            impactPromise || Promise.resolve(null),
-        ]);
-
-        if (!single) throw new Error('Campaign not found');
-
-        let impactData = null;
-        if (impactRaw) {
-            if (impactRaw.setupRequired) {
+        // Run AI analytics via Claude + Snowflake if a question was entered
+        let analyticsResult = null;
+        if (analyticsRequest) {
+            statusEl.textContent = 'Querying Snowflake via Claude…';
+            const campaignContext = emailData
+                ? `Campaign: "${emailData.campaign_name}", Category: ${emailData.category || '—'}, Send date: ${emailData.send_date || '—'}, Audience: ${emailData.audience_segment || '—'}`
+                : '';
+            const r = await fetch('/api/claude-campaign-analyst', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ seriesId, request: analyticsRequest, campaignContext }),
+            });
+            analyticsResult = await r.json();
+            if (analyticsResult.setupRequired) {
                 document.getElementById('ci-setup-card').style.display = '';
-            } else if (impactRaw.error) {
-                document.getElementById('ci-error').textContent = `Feature Impact: ${impactRaw.error}`;
+            } else if (analyticsResult.error && !analyticsResult.queryError) {
+                document.getElementById('ci-error').textContent = analyticsResult.error;
                 document.getElementById('ci-error').style.display = '';
-            } else {
-                impactData = impactRaw;
             }
         }
 
-        renderFullCampaignReport(single, allHistory || [], type, impactData);
+        renderSingleCampaignReport(emailData, emailHistory || [], analyticsResult);
 
     } catch (e) {
         alert(`Error: ${e.message}`);
     } finally {
-        btn.textContent = 'Analyze Campaign';
-        btn.disabled    = false;
+        btn.textContent  = 'Analyze Campaign';
+        btn.disabled     = false;
         statusEl.textContent = '';
     }
+}
+
+function renderSingleCampaignReport(c, history, analyticsResult) {
+    const out = document.getElementById('report-out');
+    const p   = v => v != null ? (v * 100).toFixed(1) + '%' : '—';
+    let html  = '';
+
+    // Email metrics section
+    if (c) {
+        const catH        = history.filter(h => h.category === c.category);
+        const catAvgOpen  = avgMetric(catH, 'open_rate');
+        const catAvgClick = avgMetric(catH, 'click_rate');
+        const catAvgCTOR  = avgMetric(catH, 'click_to_open_rate');
+        html += `<div class="report-section" style="margin-bottom:20px;">
+            <div class="dash-section-label" style="margin-bottom:16px;">${c.campaign_name}</div>
+            <div class="report-kpis">
+                ${c.emails_sent ? `<div class="report-kpi"><div class="report-kpi-val">${Number(c.emails_sent).toLocaleString()}</div><div class="report-kpi-label">Emails Sent</div></div>` : ''}
+                <div class="report-kpi"><div class="report-kpi-val">${p(c.open_rate)}</div><div class="report-kpi-label">Open Rate</div><div class="report-kpi-bench">${benchArrow(c.open_rate, catAvgOpen)}</div></div>
+                <div class="report-kpi"><div class="report-kpi-val">${p(c.click_rate)}</div><div class="report-kpi-label">Click Rate</div><div class="report-kpi-bench">${benchArrow(c.click_rate, catAvgClick)}</div></div>
+                <div class="report-kpi"><div class="report-kpi-val">${p(c.click_to_open_rate)}</div><div class="report-kpi-label">CTOR</div><div class="report-kpi-bench">${benchArrow(c.click_to_open_rate, catAvgCTOR)}</div></div>
+                ${c.unsubscribe_rate != null ? `<div class="report-kpi"><div class="report-kpi-val">${p(c.unsubscribe_rate)}</div><div class="report-kpi-label">Unsub Rate</div></div>` : ''}
+            </div>
+            ${[['Audience', c.audience_segment], ['Subject', c.subject_line ? `"${c.subject_line}"` : null], ['Send date', c.send_date ? fmtDate(c.send_date) : null]].filter(([,v]) => v).map(([l,v]) => `<div style="font-size:12px;color:var(--muted);margin-top:8px;"><span style="font-weight:600;color:var(--text);">${l}:</span> ${v}</div>`).join('')}
+            ${c.notes ? `<div style="font-size:13px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">${c.notes}</div>` : ''}
+        </div>`;
+    }
+
+    // AI analytics section
+    if (analyticsResult && !analyticsResult.setupRequired) {
+        html += `<div class="report-section">
+            <div class="dash-section-label" style="margin-bottom:14px;">Product Analytics</div>`;
+
+        if (analyticsResult.narrative) {
+            html += `<div style="font-size:14px;line-height:1.7;margin-bottom:16px;">${analyticsResult.narrative}</div>`;
+        }
+
+        if (analyticsResult.rows && analyticsResult.rows.length) {
+            const cols = Object.keys(analyticsResult.rows[0]);
+            html += `<div style="overflow-x:auto;margin-bottom:14px;">
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <thead><tr>${cols.map(col => `<th style="text-align:left;padding:6px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-weight:600;font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;">${col}</th>`).join('')}</tr></thead>
+                    <tbody>${analyticsResult.rows.slice(0, 25).map(row => `<tr>${cols.map(col => `<td style="padding:6px 12px;border-bottom:1px solid #1e293b;font-family:'JetBrains Mono',monospace;">${row[col] ?? '—'}</td>`).join('')}</tr>`).join('')}</tbody>
+                </table>
+                ${analyticsResult.rowCount > 25 ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Showing 25 of ${analyticsResult.rowCount} rows</div>` : ''}
+            </div>`;
+        }
+
+        if (analyticsResult.queryError) {
+            html += `<div style="font-size:12px;color:#f87171;margin-bottom:12px;">${analyticsResult.error}</div>`;
+        }
+
+        if (analyticsResult.sql) {
+            html += `<details>
+                <summary style="font-size:11px;color:var(--muted);cursor:pointer;user-select:none;">View generated SQL</summary>
+                <pre style="margin-top:8px;background:#0f172a;border-radius:6px;padding:14px;font-size:11px;color:#94a3b8;overflow-x:auto;white-space:pre-wrap;">${analyticsResult.sql.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
+            </details>`;
+        }
+
+        html += `</div>`;
+    }
+
+    if (!html) {
+        html = '<div class="empty" style="padding:24px;">No data to display.</div>';
+    }
+
+    out.innerHTML    = html;
+    out.style.display = '';
 }
 
 async function generateReport() {

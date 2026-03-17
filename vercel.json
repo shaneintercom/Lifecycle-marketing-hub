@@ -8,6 +8,7 @@
     "api/sr-ask.js": { "maxDuration": 60 },
     "api/claude-learning.js": { "maxDuration": 30 },
     "api/lifecycle-signals.js": { "maxDuration": 60 },
-    "api/claude-coverage.js": { "maxDuration": 30 }
+    "api/claude-coverage.js": { "maxDuration": 30 },
+    "api/claude-campaign-analyst.js": { "maxDuration": 60 }
   }
 }
