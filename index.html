@@ -1950,7 +1950,7 @@ function renderLibrary() {
         summaryEl.style.display = filtered.length ? '' : 'none';
         summaryEl.innerHTML = `
             <div class="lib-kpis">
-                <div class="lib-kpi"><div class="lib-kpi-val">${filtered.length}</div><div class="lib-kpi-label">Campaigns</div></div>
+                <div class="lib-kpi"><div class="lib-kpi-val">${filtered.filter(c => !c.parent_campaign).length}</div><div class="lib-kpi-label">Campaigns</div></div>
                 <div class="lib-kpi"><div class="lib-kpi-val">${pct(fAvgOpen)}</div><div class="lib-kpi-label">Avg Open</div></div>
                 <div class="lib-kpi"><div class="lib-kpi-val">${pct(fAvgClick)}</div><div class="lib-kpi-label">Avg Click</div></div>
                 <div class="lib-kpi"><div class="lib-kpi-val">${pct(fAvgCTOR)}</div><div class="lib-kpi-label">Avg CTOR</div></div>
