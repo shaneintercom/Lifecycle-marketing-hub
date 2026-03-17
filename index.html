@@ -4149,6 +4149,32 @@ async function analyzeFullCampaign() {
             ]);
             emailData    = single;
             emailHistory = history;
+
+            // If parent has no direct send data, aggregate from children
+            if (emailData && !emailData.emails_sent) {
+                const { data: kids } = await db.from('lifecycle_campaigns')
+                    .select('emails_sent, emails_sent_b, emails_opened, emails_opened_b, emails_clicked, emails_clicked_b, unsubscribed, bounced')
+                    .eq('parent_campaign', emailData.campaign_name);
+                if (kids && kids.length) {
+                    const sum = f => kids.reduce((a, k) => a + (k[f] || 0), 0);
+                    const sent    = sum('emails_sent') + sum('emails_sent_b');
+                    const opened  = sum('emails_opened') + sum('emails_opened_b');
+                    const clicked = sum('emails_clicked') + sum('emails_clicked_b');
+                    const unsub   = sum('unsubscribed');
+                    if (sent) {
+                        emailData = {
+                            ...emailData,
+                            emails_sent:        sent,
+                            open_rate:          opened  ? opened  / sent   : null,
+                            click_rate:         clicked ? clicked / sent   : null,
+                            click_to_open_rate: (opened && clicked) ? clicked / opened : null,
+                            unsubscribe_rate:   unsub   ? unsub   / sent   : null,
+                            _aggregated:        true,
+                            _childCount:        kids.length,
+                        };
+                    }
+                }
+            }
         }
 
         // Run AI analytics via Claude + Snowflake if a question was entered
@@ -4196,7 +4222,8 @@ function renderSingleCampaignReport(c, history, analyticsResult) {
         const catAvgCTOR  = avgMetric(catH, 'click_to_open_rate');
         const hasMetrics  = c.open_rate != null || c.click_rate != null || c.emails_sent != null;
         html += `<div class="report-section" style="margin-bottom:20px;">
-            <div class="dash-section-label" style="margin-bottom:16px;">${c.campaign_name}</div>
+            <div class="dash-section-label" style="margin-bottom:${c._aggregated ? '4px' : '16px'};">${c.campaign_name}</div>
+            ${c._aggregated ? `<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Aggregated across ${c._childCount} sends</div>` : ''}
             ${hasMetrics ? `<div class="report-kpis">
                 ${c.emails_sent ? `<div class="report-kpi"><div class="report-kpi-val">${Number(c.emails_sent).toLocaleString()}</div><div class="report-kpi-label">Emails Sent</div></div>` : ''}
                 ${c.open_rate != null ? `<div class="report-kpi"><div class="report-kpi-val">${p(c.open_rate)}</div><div class="report-kpi-label">Open Rate</div><div class="report-kpi-bench">${benchArrow(c.open_rate, catAvgOpen)}</div></div>` : ''}
