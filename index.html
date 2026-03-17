@@ -1798,7 +1798,7 @@ function _copyShippedList() {
 }
 
 function renderBenchmarkGrid(q1, all) {
-    const VALID_CATS = new Set(['Launches','Early lifecycle','Usage','Events','Acquisition','Adhoc','Expansion','Fin SA','Migrations','Newsletter']);
+    const VALID_CATS = new Set(['Launches','Early lifecycle','Usage','Events','Acquisition','Adhoc','Expansion','Fin SA','Migrations','Newsletter','Ops']);
     const CAT_REMAP  = { 'product launch':'Launches','onboarding':'Early lifecycle','event':'Events','re-engagement':'Usage','reengagement':'Usage','nurture':'Usage','promotional':'Adhoc','retention':'Usage','conversion':'Usage','upsell':'Expansion','winback':'Usage' };
     const group = (rows) => {
         const g = {};
