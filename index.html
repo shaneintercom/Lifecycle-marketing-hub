@@ -4298,9 +4298,43 @@ async function generateReport() {
 
     btn.textContent = 'Generate Report'; btn.disabled = false;
 
-    const camps   = campaigns  || [];
     const tests   = abtests   || [];
     const history = allHistory || [];
+
+    // Enrich parent campaigns that have no direct data by aggregating from children
+    let camps = campaigns || [];
+    const parentNamesNeedingAgg = camps.filter(c => !c.emails_sent).map(c => c.campaign_name);
+    if (parentNamesNeedingAgg.length) {
+        const { data: allKids } = await db.from('lifecycle_campaigns')
+            .select('parent_campaign, emails_sent, emails_sent_b, emails_opened, emails_opened_b, emails_clicked, emails_clicked_b, unsubscribed, bounced')
+            .in('parent_campaign', parentNamesNeedingAgg);
+        const kidsByParent = {};
+        (allKids || []).forEach(k => {
+            if (!kidsByParent[k.parent_campaign]) kidsByParent[k.parent_campaign] = [];
+            kidsByParent[k.parent_campaign].push(k);
+        });
+        camps = camps.map(c => {
+            if (c.emails_sent) return c;
+            const kids = kidsByParent[c.campaign_name];
+            if (!kids || !kids.length) return c;
+            const sum  = f => kids.reduce((a, k) => a + (k[f] || 0), 0);
+            const sent    = sum('emails_sent') + sum('emails_sent_b');
+            const opened  = sum('emails_opened') + sum('emails_opened_b');
+            const clicked = sum('emails_clicked') + sum('emails_clicked_b');
+            const unsub   = sum('unsubscribed');
+            if (!sent) return c;
+            return {
+                ...c,
+                emails_sent:        sent,
+                open_rate:          opened  ? opened  / sent   : null,
+                click_rate:         clicked ? clicked / sent   : null,
+                click_to_open_rate: (opened && clicked) ? clicked / opened : null,
+                unsubscribe_rate:   unsub   ? unsub   / sent   : null,
+                _aggregated: true,
+                _childCount: kids.length,
+            };
+        });
+    }
 
     // Sum all rows with a CSV upload (parents with data + children) — avoids double-counting containers
     const totalSent = (allSends || []).reduce((a, c) => a + (c.emails_sent || 0) + (c.emails_sent_b || 0), 0);
@@ -4346,7 +4380,7 @@ async function generateReport() {
         return `<div class="report-row">
             <div>
                 <div style="font-weight:600;font-size:13px;margin-bottom:2px;">${c.campaign_name}</div>
-                <div style="font-size:12px;color:var(--muted);">${c.category || ''}${c.send_date ? ' · ' + fmtDate(c.send_date) : ''}${c.emails_sent ? ' · ' + Number(c.emails_sent).toLocaleString() + ' sent' : ''}</div>
+                <div style="font-size:12px;color:var(--muted);">${c.category || ''}${c.send_date ? ' · ' + fmtDate(c.send_date) : ''}${c.emails_sent ? ' · ' + Number(c.emails_sent).toLocaleString() + ' sent' : ''}${c._aggregated ? ` · ${c._childCount} sends` : ''}</div>
                 ${c.subject_line ? `<div style="font-size:12px;color:var(--muted);font-style:italic;margin-top:2px;">"${c.subject_line}"</div>` : ''}
                 ${c.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:3px;">${c.notes}</div>` : ''}
             </div>
