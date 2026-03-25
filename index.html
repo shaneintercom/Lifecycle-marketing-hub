@@ -46,19 +46,39 @@
             pointer-events: none;
             z-index: 0;
         }
-        header, nav, main { position: relative; z-index: 1; }
+        header, main { position: relative; z-index: 1; }
 
-        header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 18px 28px; position: relative; }
+        /* ── APP SHELL LAYOUT ── */
+        .app-shell { display: flex; min-height: 100vh; }
+        .app-body { margin-left: 220px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; min-width: 0; }
+
+        /* ── SIDEBAR ── */
+        #sidebar { width: 220px; background: #0d1b2e; border-right: 1px solid var(--border); position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto; z-index: 10; display: flex; flex-direction: column; }
+        .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 18px 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .sidebar-logo-name { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; }
+        .sidebar-logo-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+        #sidebar nav { padding: 10px 8px; flex: 1; display: flex; flex-direction: column; gap: 1px; background: none; border: none; overflow-x: visible; }
+        #sidebar nav button { display: flex; align-items: center; gap: 9px; width: 100%; background: none; border: none; padding: 8px 10px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); border-radius: 7px; transition: all 0.15s; text-align: left; white-space: nowrap; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; }
+        #sidebar nav button .nav-icon { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.5; }
+        #sidebar nav button.active { color: var(--brand); background: rgba(129,140,248,0.1); font-weight: 600; }
+        #sidebar nav button.active .nav-icon { opacity: 1; }
+        #sidebar nav button:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.04); }
+        #sidebar nav button:hover:not(.active) .nav-icon { opacity: 0.8; }
+        .sidebar-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #2a3d55; padding: 12px 10px 4px; font-family: 'JetBrains Mono', monospace; }
+
+        /* ── TOPBAR ── */
+        header { background: #0d1b2e; border-bottom: 1px solid var(--border); padding: 13px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 5; }
         header::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, var(--brand) 0%, var(--accent) 50%, transparent 100%); opacity: 0.5; }
-        header h1 { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; }
-        header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+        #topbar-title h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+        #topbar-title p { color: var(--muted); font-size: 12px; margin: 2px 0 0; }
+        .topbar-right { display: flex; align-items: center; gap: 10px; }
+        .topbar-search { display: flex; align-items: center; gap: 7px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px; }
+        .topbar-search svg { opacity: 0.35; flex-shrink: 0; }
+        .topbar-search input { background: none; border: none; outline: none; color: var(--text); font-size: 13px; width: 170px; font-family: inherit; }
+        .topbar-search input::placeholder { color: var(--muted); }
+        .topbar-avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, var(--brand) 0%, #a855f7 100%); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: white; flex-shrink: 0; }
 
-        nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 8px 20px; display: flex; overflow-x: auto; gap: 2px; }
-        nav button { background: none; border: none; padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); border-radius: 6px; transition: all 0.15s; white-space: nowrap; }
-        nav button.active { color: var(--brand); background: rgba(129,140,248,0.1); font-weight: 600; }
-        nav button:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.04); }
-
-        main { padding: 28px; max-width: 1400px; margin: 0 auto; }
+        main { padding: 24px 28px; max-width: 1400px; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
@@ -395,15 +415,16 @@
         .pu-recent-name { font-weight:600; font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .pu-recent-meta { font-size:12px; color:var(--muted); white-space:nowrap; }
         .pu-new-pill { font-size:10px; font-weight:700; background:var(--brand); color:#fff; border-radius:4px; padding:1px 5px; width:16px; text-align:center; }
-        .coverage-signal-card { background: var(--surface); border: 1px solid var(--border); border-radius:10px; padding:20px 22px; }
-        .coverage-signal-card .sig-label { font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:10px; font-family:'JetBrains Mono',monospace; }
-        .coverage-signal-card .sig-count { font-size:38px; font-weight:800; letter-spacing:-0.03em; line-height:1.1; }
-        .coverage-signal-card .sig-angle { font-size:12px; color:var(--muted); margin-top:10px; line-height:1.6; border-top:1px solid var(--border); padding-top:10px; }
-        .urgency-high { border-top: 2px solid var(--accent); }
-        .urgency-medium { border-top: 2px solid var(--brand); }
     </style>
 </head>
-<body>
+<body style="visibility:hidden;">
+<script>
+  // Auth gate — check session before showing anything
+  fetch('/api/check-auth').then(function(r) {
+    if (r.status === 401) { window.location.replace('/login.html'); }
+    else { document.body.style.visibility = ''; }
+  }).catch(function() { document.body.style.visibility = ''; });
+</script>
 
 <!-- Film grain texture overlay -->
 <svg id="grain" aria-hidden="true" focusable="false" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50;opacity:0.038;" xmlns="http://www.w3.org/2000/svg">
@@ -414,33 +435,86 @@
     <rect width="100%" height="100%" filter="url(#noise-filter)"/>
 </svg>
 
-<header>
-    <div style="display:flex;align-items:center;gap:12px;">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="36" height="36" style="flex-shrink:0;border-radius:7px;">
+<div class="app-shell">
+
+<!-- ── SIDEBAR ── -->
+<aside id="sidebar">
+    <div class="sidebar-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" style="flex-shrink:0;border-radius:7px;">
             <defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#f97316"/></linearGradient></defs>
             <rect width="32" height="32" rx="7" fill="url(#hg)"/>
             <text x="16" y="22" font-family="system-ui,sans-serif" font-size="11" font-weight="800" fill="white" text-anchor="middle">CLM</text>
         </svg>
         <div>
-            <h1 style="margin:0;">Lifecycle Marketing Hub</h1>
-            <p style="margin:0;">Email campaigns &middot; A/B tests &middot; Reporting</p>
+            <div class="sidebar-logo-name">Lifecycle Marketing</div>
+            <div class="sidebar-logo-sub">Campaign Hub</div>
         </div>
     </div>
-</header>
+    <nav>
+        <div class="sidebar-section-label">Overview</div>
+        <button class="active" data-tab="dashboard">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            Dashboard
+        </button>
+        <button data-tab="calendar">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg>
+            Calendar
+        </button>
+        <div class="sidebar-section-label">Campaigns</div>
+        <button data-tab="library">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
+            Campaign Library
+        </button>
+        <button data-tab="reports">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Generate Report
+        </button>
+        <button data-tab="swipe">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Email Inspo
+        </button>
+        <div class="sidebar-section-label">Experiments</div>
+        <button data-tab="abtests">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M10 2v7.31L5.72 18.6A2 2 0 007.59 21h8.82a2 2 0 001.87-2.4L14 9.31V2"/><line x1="8.5" y1="2" x2="15.5" y2="2"/></svg>
+            A/B Tests
+        </button>
+        <button data-tab="backlog">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            Experiment Backlog
+        </button>
+        <div class="sidebar-section-label">Product</div>
+        <button data-tab="productupdates">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            Product Updates
+        </button>
+        <button data-tab="activation">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+            Activation Tracking
+        </button>
+        <div class="sidebar-section-label">Comms</div>
+        <button data-tab="seriesreplies">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            Series Replies
+        </button>
+    </nav>
+</aside>
 
-<nav>
-    <button class="active" data-tab="dashboard">Dashboard</button>
-    <button data-tab="library">Campaign Library</button>
-    <button data-tab="calendar">Calendar</button>
-    <button data-tab="swipe">Email Inspo</button>
-    <button data-tab="backlog">Experiment Backlog</button>
-    <button data-tab="abtests">A/B Tests</button>
-    <button data-tab="reports">Generate Report</button>
-    <button data-tab="productupdates">Product Updates</button>
-    <button data-tab="seriesreplies">Series Replies</button>
-    <button data-tab="activation">Activation Tracking</button>
-    <button data-tab="coverage">Coverage Map</button>
-</nav>
+<!-- ── APP BODY ── -->
+<div class="app-body">
+
+<header>
+    <div id="topbar-title">
+        <h1>Dashboard</h1>
+        <p>Email campaigns &middot; A/B tests &middot; Reporting</p>
+    </div>
+    <div class="topbar-right">
+        <div class="topbar-search">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Search campaigns…" id="topbar-search-input">
+        </div>
+        <div class="topbar-avatar">SR</div>
+    </div>
+</header>
 
 <main>
 
@@ -830,24 +904,24 @@
                         </div>
                     </div>
                     <div class="field" style="margin-bottom:0;">
-                        <label>Intercom Series ID <span style="font-weight:400;color:var(--muted);">— optional &middot; find in URL: &hellip;/outbound/series/<strong style="color:var(--text);">XXXXXXXX</strong></span></label>
+                        <label>Series / Post ID <span style="font-weight:400;color:var(--muted);">— optional &middot; find in the Intercom URL: &hellip;/outbound/series/<strong style="color:var(--text);">XXXXXXXX</strong></span></label>
                         <input type="number" id="ci-ruleset-id" placeholder="e.g. 57652582">
                     </div>
                 </div>
                 <div class="field" style="margin-bottom:0;">
                     <label>Analytics question</label>
                     <textarea id="ci-analytics-request" rows="3"
-                        placeholder="e.g. How many workspaces that received this series have activated Fin? What % have Fin guidance set up? How has Fin resolution rate changed in the last 30 days?"
+                        placeholder="e.g. Did this series impact Fin guidance setup? Compare recipient workspaces vs control before and after the send date. How did involvement rate change? What % set up procedures?"
                         style="width:100%;resize:vertical;font-size:13px;"></textarea>
-                    <div style="font-size:11px;color:var(--muted);margin-top:6px;">Claude generates and runs a Snowflake query, then narrates the results.</div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:6px;">Claude generates and runs a Snowflake query, then narrates the results. Include a Series ID above for before/after impact analysis.</div>
                 </div>
             </div>
 
             <!-- ── Date Range ─────────────────────────────────────────────── -->
             <div id="r-mode-period" style="display:none;">
                 <div class="grid-2">
-                    <div class="field"><label>From</label><input type="date" id="r-from"></div>
-                    <div class="field"><label>To</label><input type="date" id="r-to"></div>
+                    <div class="field"><label>From</label><input type="date" id="r-from" onclick="try{this.showPicker()}catch(_){}" style="cursor:pointer;"></div>
+                    <div class="field"><label>To</label><input type="date" id="r-to" onclick="try{this.showPicker()}catch(_){}" style="cursor:pointer;"></div>
                 </div>
             </div>
 
@@ -892,8 +966,15 @@
         <!-- Error state -->
         <div id="ci-error" style="display:none;" class="alert alert-error"></div>
 
+        <!-- Recent reports chips -->
+        <div id="report-history-wrap" style="display:none;margin-top:20px;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;">Recent reports</div>
+            <div id="report-history-chips" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+        </div>
+
         <!-- Unified results (email performance + feature impact) -->
         <div id="report-out" style="display:none;margin-top:24px;"></div>
+
     </div>
 
     <!-- PRODUCT UPDATES -->
@@ -1120,27 +1201,10 @@
     </div>
 
 <!-- COVERAGE MAP -->
-<div id="tab-coverage" class="tab-content">
-    <h2>Lifecycle Coverage Map</h2>
-    <p style="color:var(--muted);font-size:13px;margin-bottom:24px;">
-        Live product signals from Snowflake — workspaces showing gaps in their Fin adoption that lifecycle emails can address.
-    </p>
-    <div id="coverage-signals">
-        <div style="color:var(--muted);font-size:13px;">Loading signals…</div>
-    </div>
-    <div class="report-section" style="margin-top:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
-            <div>
-                <div class="dash-section-label" style="margin-bottom:4px;">Coverage Analysis</div>
-                <p style="font-size:12px;color:var(--muted);">Claude reads your signal counts + campaign history and identifies what's being served and what isn't.</p>
-            </div>
-            <button id="coverage-gen-btn" class="btn btn-primary" onclick="generateCoverageAnalysis()" style="font-size:13px;flex-shrink:0;margin-left:12px;">✨ Generate Coverage Analysis</button>
-        </div>
-        <div id="coverage-analysis-output"></div>
-    </div>
-</div>
 
 </main>
+</div><!-- /.app-body -->
+</div><!-- /.app-shell -->
 
 <!-- SERIES REPLY TOOLTIP -->
 <div id="sr-tooltip" style="display:none;position:fixed;z-index:200;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 16px;max-width:420px;font-size:13px;line-height:1.65;color:#e2e8f0;box-shadow:0 4px 24px rgba(0,0,0,0.5);pointer-events:none;white-space:pre-wrap;word-break:break-word;"></div>
@@ -1331,23 +1395,36 @@ const PU_CODA_DOC   = '-bP_Aj0QDV';
 const PU_CODA_TABLE = 'grid-7jeigIB__W';
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
-document.querySelectorAll('nav button').forEach(btn => {
+const TAB_TITLES = {
+    dashboard:      { title: 'Dashboard',            sub: 'Email campaigns \u00b7 A/B tests \u00b7 Reporting' },
+    library:        { title: 'Campaign Library',     sub: 'Browse and manage all campaigns' },
+    calendar:       { title: 'Calendar',             sub: 'Campaign schedule at a glance' },
+    swipe:          { title: 'Email Inspo',          sub: 'Design inspiration and reference library' },
+    backlog:        { title: 'Experiment Backlog',   sub: 'Hypothesis pipeline and testing ideas' },
+    abtests:        { title: 'A/B Tests',            sub: 'Test results, learnings, and insights' },
+    reports:        { title: 'Generate Report',      sub: 'Build and share campaign performance reports' },
+    productupdates: { title: 'Product Updates',      sub: 'Track and brief new product launches' },
+    seriesreplies:  { title: 'Series Replies',       sub: 'Respond to email series engagement' },
+    activation:     { title: 'Activation Tracking',  sub: 'Monitor onboarding and activation metrics' },
+};
+document.querySelectorAll('#sidebar nav button[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
-        document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#sidebar nav button[data-tab]').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        const ti = TAB_TITLES[btn.dataset.tab];
+        if (ti) { document.querySelector('#topbar-title h1').textContent = ti.title; document.querySelector('#topbar-title p').textContent = ti.sub; }
         if (btn.dataset.tab === 'dashboard') loadDashboard();
         if (btn.dataset.tab === 'library')   loadLibrary();
         if (btn.dataset.tab === 'calendar')  { loadCalendar(); silentSyncFromCoda(); }
         if (btn.dataset.tab === 'swipe')     loadInspiration();
         if (btn.dataset.tab === 'backlog')   loadBacklog();
         if (btn.dataset.tab === 'abtests')   loadABTests();
-        if (btn.dataset.tab === 'reports')        loadCampaignsForReport();
+        if (btn.dataset.tab === 'reports')        { loadCampaignsForReport(); renderReportHistoryChips(); }
         if (btn.dataset.tab === 'productupdates') loadProductUpdates();
         if (btn.dataset.tab === 'seriesreplies')  loadSRRecentCampaigns();
         if (btn.dataset.tab === 'activation')     loadActivation();
-        if (btn.dataset.tab === 'coverage')       loadCoverageMap();
     });
 });
 
@@ -1668,10 +1745,12 @@ async function renderUpcomingLaunches() {
 }
 
 function switchToProductUpdates() {
-    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#sidebar nav button[data-tab]').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelector('nav button[data-tab="productupdates"]').classList.add('active');
+    document.querySelector('#sidebar nav button[data-tab="productupdates"]').classList.add('active');
     document.getElementById('tab-productupdates').classList.add('active');
+    const ti = TAB_TITLES['productupdates'];
+    if (ti) { document.querySelector('#topbar-title h1').textContent = ti.title; document.querySelector('#topbar-title p').textContent = ti.sub; }
     loadProductUpdates();
 }
 
@@ -3820,7 +3899,7 @@ async function loadABTests() {
             <td>${pct(t.variant_b_click_rate)}</td>
             <td class="${displayWinner==='A'?'winner-a':displayWinner==='B'?'winner-b':''}">${displayWinner==='N'||!displayWinner?'—':displayWinner}</td>
             <td>${ssCell}</td>
-            <td style="max-width:180px;font-size:12px;">${t.winner_notes||'—'}</td>
+            <td style="max-width:200px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.winner_notes||'—'}</td>
             <td>${t.test_date||'—'}</td>
         </tr>`;
     }).join('');
@@ -4205,13 +4284,14 @@ async function analyzeFullCampaign() {
             analyticsResult = await r.json();
             if (analyticsResult.setupRequired) {
                 document.getElementById('ci-setup-card').style.display = '';
-            } else if (analyticsResult.error && !analyticsResult.queryError) {
+            } else if (analyticsResult.error && !analyticsResult.queryError && !analyticsResult.networkPolicyError) {
                 document.getElementById('ci-error').textContent = analyticsResult.error;
                 document.getElementById('ci-error').style.display = '';
             }
         }
 
         renderSingleCampaignReport(emailData, emailHistory || [], analyticsResult);
+        saveReportHistory(emailData, analyticsRequest, analyticsResult);
 
     } catch (e) {
         alert(`Error: ${e.message}`);
@@ -4305,7 +4385,13 @@ function renderSingleCampaignReport(c, history, analyticsResult) {
             </div>`;
         }
 
-        if (analyticsResult.queryError) {
+        if (analyticsResult.networkPolicyError) {
+            html += `<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+                <div style="font-size:12px;font-weight:700;color:#fbbf24;margin-bottom:6px;">Snowflake Network Policy Block</div>
+                <div style="font-size:12px;color:#fde68a;line-height:1.6;">Your PAT token is restricted to Intercom's corporate network and can't be used from Vercel's servers.<br>
+                <strong>Fix:</strong> In Snowflake, create a new PAT with <em>no network policy</em> (or ask your admin), then update <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">SNOWFLAKE_PAT</code> in Vercel environment variables.</div>
+            </div>`;
+        } else if (analyticsResult.queryError) {
             html += `<div style="font-size:12px;color:#f87171;margin-bottom:12px;">${analyticsResult.error}</div>`;
         }
 
@@ -4518,6 +4604,7 @@ async function generateReport() {
     `;
     document.getElementById('report-out').style.display = 'block';
     document.getElementById('report-out').scrollIntoView({ behavior: 'smooth' });
+    savePeriodReportHistory(from, to, type, periodLabel, document.getElementById('report-out').innerHTML);
 
     // Store data for on-demand narrative generation
     window._narrativeData = {
@@ -5103,6 +5190,375 @@ function buildActionTimelineSVG(timeline) {
         <line x1="${mL}" y1="${mT+cH}" x2="${mL+cW}" y2="${mT+cH}" stroke="#334155"/>
         ${xAxis}
         ${recPts  ? `<polyline points="${recPts.trim()}"  fill="none" stroke="#818cf8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+        ${ctrlPts ? `<polyline points="${ctrlPts.trim()}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5,3"/>` : ''}
+    </svg>`;
+}
+
+// ── REPORT HISTORY ────────────────────────────────────────────────────────────
+const REPORT_HISTORY_KEY = 'clm_report_history';
+const REPORT_HISTORY_MAX = 12;
+
+function saveReportHistory(emailData, analyticsRequest, analyticsResult) {
+    const label = emailData?.campaign_name
+        || (analyticsRequest ? analyticsRequest.slice(0, 50) + (analyticsRequest.length > 50 ? '…' : '') : null);
+    if (!label) return;
+
+    const entry = {
+        id:               Date.now(),
+        type:             'single',
+        label,
+        ts:               new Date().toISOString(),
+        emailData:        emailData        || null,
+        analyticsRequest: analyticsRequest || null,
+        analyticsResult:  analyticsResult  || null,
+    };
+
+    _pushReportHistory(entry);
+}
+
+function savePeriodReportHistory(from, to, reportType, periodLabel, html) {
+    const entry = {
+        id:         Date.now(),
+        type:       'period',
+        label:      periodLabel,
+        ts:         new Date().toISOString(),
+        from,
+        to,
+        reportType,
+        html,
+    };
+    _pushReportHistory(entry);
+}
+
+function _pushReportHistory(entry) {
+    try {
+        const existing = JSON.parse(localStorage.getItem(REPORT_HISTORY_KEY) || '[]');
+        const filtered = existing.filter(e => e.label !== entry.label);
+        const updated  = [entry, ...filtered].slice(0, REPORT_HISTORY_MAX);
+        localStorage.setItem(REPORT_HISTORY_KEY, JSON.stringify(updated));
+    } catch (_) {}
+    renderReportHistoryChips();
+}
+
+function renderReportHistoryChips() {
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem(REPORT_HISTORY_KEY) || '[]'); } catch (_) {}
+
+    const wrap  = document.getElementById('report-history-wrap');
+    const chips = document.getElementById('report-history-chips');
+    if (!history.length) { wrap.style.display = 'none'; return; }
+
+    wrap.style.display = '';
+    chips.innerHTML = history.map(e => {
+        const ago  = formatHistoryAgo(e.ts);
+        const icon = e.type === 'period' ? '📅 ' : '';
+        return `<button class="btn-sm" style="font-size:12px;display:flex;align-items:center;gap:6px;max-width:280px;"
+            onmousedown="loadReportFromHistory(${e.id})">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${icon}${e.label}</span>
+            <span style="color:var(--muted);flex-shrink:0;font-size:10px;">${ago}</span>
+        </button>`;
+    }).join('');
+}
+
+let _reportHistoryCache = [];
+function getReportHistory() {
+    try { _reportHistoryCache = JSON.parse(localStorage.getItem(REPORT_HISTORY_KEY) || '[]'); } catch (_) { _reportHistoryCache = []; }
+    return _reportHistoryCache;
+}
+
+function loadReportFromHistory(id) {
+    const history = getReportHistory();
+    const entry   = history.find(e => e.id === id);
+    if (!entry) return;
+
+    const out = document.getElementById('report-out');
+
+    if (entry.type === 'period') {
+        // Restore date inputs and switch to period mode
+        switchReportMode('period', document.querySelector('.inner-tabs button:nth-child(2)'));
+        document.getElementById('r-from').value = entry.from || '';
+        document.getElementById('r-to').value   = entry.to   || '';
+        if (entry.reportType) document.getElementById('r-type').value = entry.reportType;
+        out.innerHTML     = entry.html || '';
+        out.style.display = 'block';
+    } else {
+        // Restore single campaign inputs
+        if (entry.emailData) {
+            document.getElementById('r-campaign').value        = entry.emailData.campaign_id || '';
+            document.getElementById('r-campaign-search').value = entry.emailData.campaign_name || '';
+        } else {
+            document.getElementById('r-campaign').value        = '';
+            document.getElementById('r-campaign-search').value = '';
+        }
+        document.getElementById('ci-analytics-request').value = entry.analyticsRequest || '';
+        renderSingleCampaignReport(entry.emailData, [], entry.analyticsResult);
+    }
+
+    out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function formatHistoryAgo(iso) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1)   return 'just now';
+    if (mins < 60)  return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24)   return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ── IMPACT ANALYSIS ───────────────────────────────────────────────────────────
+async function runImpactAnalysis() {
+    const rulesetId = document.getElementById('ci-ruleset-id').value.trim();
+    const metric    = document.getElementById('ci-metric').value;
+    const btn       = document.getElementById('ci-impact-btn');
+    const statusEl  = document.getElementById('ci-impact-status');
+    const out       = document.getElementById('ci-impact-out');
+
+    if (!rulesetId) { alert('Enter a Series ID above to run impact analysis.'); return; }
+    if (!metric)    { alert('Select a feature metric to measure.'); return; }
+
+    btn.disabled = true; btn.textContent = 'Analyzing…';
+    statusEl.textContent = 'Querying Snowflake…';
+    out.style.display = 'none';
+    document.getElementById('ci-setup-card').style.display = 'none';
+
+    try {
+        const r = await fetch('/api/campaign-impact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rulesetId, featureMetric: metric }),
+        });
+        const d = await r.json();
+
+        if (d.setupRequired) {
+            document.getElementById('ci-setup-card').style.display = '';
+            return;
+        }
+        if (d.error) {
+            out.innerHTML = `<div class="alert alert-error">${d.error}</div>`;
+            out.style.display = '';
+            return;
+        }
+
+        out.innerHTML = renderImpactReport(d);
+        out.style.display = '';
+    } catch (e) {
+        out.innerHTML = `<div class="alert alert-error">Error: ${e.message}</div>`;
+        out.style.display = '';
+    } finally {
+        btn.disabled = false; btn.textContent = '✦ Run Impact Analysis';
+        statusEl.textContent = '';
+    }
+}
+
+function renderImpactReport(d) {
+    if (!d.actionMode) return buildImpactSection(d);  // fall back to existing renderer for metric mode
+
+    const r    = d.recipient || {};
+    const c    = d.control   || {};
+    const sign = v => v > 0 ? '+' : '';
+    const pp   = v => v != null ? `${sign(v)}${Number(v).toFixed(2)}pp` : '—';
+    const pct  = v => v != null ? `${Number(v).toFixed(1)}%` : '—';
+
+    const recBefore  = r.activationRateBefore || 0;
+    const recAfter   = r.activationRateAfter  || 0;
+    const ctrlBefore = c.activationRateBefore || 0;
+    const ctrlAfter  = c.activationRateAfter  || 0;
+    const recLift    = recAfter  - recBefore;
+    const ctrlLift   = ctrlAfter - ctrlBefore;
+    const trueLift   = recLift - ctrlLift;
+    const multiplier = ctrlLift > 0 ? recLift / ctrlLift : null;
+    const liftColor  = trueLift > 0 ? '#4ade80' : trueLift < 0 ? '#f87171' : 'var(--muted)';
+    const headline   = `Did this drive ${(d.featureLabel || '').replace(' ↗', '')} adoption?`;
+
+    const weekly       = impactAggregateWeekly(d.timeline || []);
+    const weeklyChart  = buildImpactWeeklyChart(weekly, d.campaign?.sendDate);
+
+    const cohortPanel = (label, cd, before, after, color) => {
+        const lift = after - before;
+        const lc   = lift > 0 ? '#4ade80' : lift < 0 ? '#f87171' : 'var(--muted)';
+        return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${color};margin-bottom:10px;">${label}</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${(cd.totalWorkspaces || 0).toLocaleString()} workspaces</div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;">
+                <div>
+                    <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">Before</div>
+                    <div style="font-size:26px;font-weight:800;">${pct(before)}</div>
+                    <div style="font-size:11px;color:var(--muted);">${(cd.activatedBefore || 0)} wks</div>
+                </div>
+                <div style="color:var(--muted);font-size:20px;padding-bottom:14px;">&#8594;</div>
+                <div>
+                    <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">After</div>
+                    <div style="font-size:26px;font-weight:800;">${pct(after)}</div>
+                    <div style="font-size:11px;color:var(--muted);">${(cd.activatedAfter || 0)} wks</div>
+                </div>
+                <div>
+                    <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">Lift</div>
+                    <div style="font-size:22px;font-weight:800;color:${lc};">${pp(lift)}</div>
+                </div>
+            </div>
+        </div>`;
+    };
+
+    return `<div class="report-section">
+        <div class="dash-section-label" style="margin-bottom:20px;">${headline}</div>
+
+        <div style="display:grid;grid-template-columns:220px 1fr;gap:20px;margin-bottom:24px;align-items:start;">
+            <!-- Headline lift card -->
+            <div style="background:var(--surface);border:2px solid ${trueLift > 0 ? '#4ade80' : trueLift < 0 ? '#f87171' : 'var(--border)'};border-radius:12px;padding:28px 16px;text-align:center;">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px;">True Campaign Lift</div>
+                <div style="font-size:44px;font-weight:900;line-height:1;color:${liftColor};">${sign(trueLift)}${Math.abs(trueLift).toFixed(2)}<span style="font-size:22px;">pp</span></div>
+                ${multiplier != null ? `<div style="font-size:13px;font-weight:700;color:${liftColor};margin-top:10px;">${multiplier.toFixed(1)}× more growth than control</div>` : ''}
+                <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6;">Net of organic trend<br>(recipient lift − control lift)</div>
+            </div>
+
+            <!-- 4 stat cards -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                ${[
+                    ['Recipients — Before', pct(recBefore), 'var(--text)'],
+                    ['Recipients — After',  pct(recAfter),  '#818cf8'],
+                    ['Organic Lift (Control)', pp(ctrlLift), ctrlLift > 0.01 ? '#94a3b8' : 'var(--muted)'],
+                    ['True Campaign Lift',     pp(trueLift),  liftColor],
+                ].map(([label, val, color]) => `
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 14px;">
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">${label}</div>
+                    <div style="font-size:26px;font-weight:800;color:${color};">${val}</div>
+                </div>`).join('')}
+            </div>
+        </div>
+
+        <!-- Side-by-side cohort panels -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+            ${cohortPanel('Recipients', r, recBefore, recAfter, '#818cf8')}
+            ${cohortPanel('Control (non-recipients)', c, ctrlBefore, ctrlAfter, '#94a3b8')}
+        </div>
+
+        <!-- Weekly chart -->
+        ${weeklyChart ? `<div style="margin-bottom:24px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:12px;">Weekly new activations — % of each cohort (post-campaign window)</div>
+            ${weeklyChart}
+            <div style="display:flex;gap:20px;margin-top:10px;font-size:12px;">
+                <span><span style="color:#818cf8;font-weight:700;">&#9135;&#9135;</span> Recipients</span>
+                <span><span style="color:#94a3b8;">- -</span> Control</span>
+                <span><span style="color:#fbbf24;">|</span> Send date</span>
+            </div>
+        </div>` : ''}
+
+        <!-- Breakdown table -->
+        <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px;">Full breakdown</div>
+            <table>
+                <thead><tr>
+                    <th>Cohort</th>
+                    <th>Workspaces</th>
+                    <th>Baseline rate (−30d)</th>
+                    <th>Post-campaign rate (+30d)</th>
+                    <th>Lift</th>
+                </tr></thead>
+                <tbody>
+                    <tr>
+                        <td style="font-weight:600;color:#818cf8;">Recipients</td>
+                        <td>${(r.totalWorkspaces || 0).toLocaleString()}</td>
+                        <td>${pct(recBefore)} <span style="font-size:11px;color:var(--muted);">(${r.activatedBefore || 0} wks)</span></td>
+                        <td>${pct(recAfter)} <span style="font-size:11px;color:var(--muted);">(${r.activatedAfter || 0} wks)</span></td>
+                        <td style="font-weight:700;color:${recLift > 0 ? '#4ade80' : '#f87171'};">${pp(recLift)}</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight:600;color:#94a3b8;">Control</td>
+                        <td>${(c.totalWorkspaces || 0).toLocaleString()}</td>
+                        <td>${pct(ctrlBefore)} <span style="font-size:11px;color:var(--muted);">(${c.activatedBefore || 0} wks)</span></td>
+                        <td>${pct(ctrlAfter)} <span style="font-size:11px;color:var(--muted);">(${c.activatedAfter || 0} wks)</span></td>
+                        <td style="font-weight:700;color:${ctrlLift > 0 ? '#4ade80' : '#f87171'};">${pp(ctrlLift)}</td>
+                    </tr>
+                    <tr style="border-top:2px solid var(--border);">
+                        <td colspan="4" style="font-weight:700;text-align:right;">True campaign lift (recipient − organic):</td>
+                        <td style="font-weight:800;font-size:16px;color:${liftColor};">${pp(trueLift)}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        ${d.campaign ? `<div style="font-size:11px;color:var(--muted);margin-top:16px;padding-top:14px;border-top:1px solid var(--border);line-height:1.8;">
+            Series ${d.campaign.rulesetId} &middot; Sent ${d.campaign.sendDate} &middot; ${(d.campaign.totalRecipients || 0).toLocaleString()} recipients &middot; ${(d.campaign.matchedWorkspaces || 0).toLocaleString()} workspaces matched (${d.campaign.matchRate || 0}%)
+            ${d.campaign.openRate ? ` &middot; Open rate ${d.campaign.openRate}%` : ''}
+        </div>` : ''}
+    </div>`;
+}
+
+function impactAggregateWeekly(timeline) {
+    if (!timeline.length) return [];
+    const weeks = [];
+    let bucket = null;
+    timeline.forEach(d => {
+        const dow = new Date(d.date + 'T00:00:00').getDay();
+        if (!bucket || dow === 0) {
+            if (bucket) weeks.push({ date: bucket.lastDate, recipientPct: bucket.recSum / bucket.n, controlPct: bucket.ctrlSum / bucket.n });
+            bucket = { lastDate: d.date, recSum: d.recipientPct, ctrlSum: d.controlPct, n: 1 };
+        } else {
+            bucket.recSum  += d.recipientPct;
+            bucket.ctrlSum += d.controlPct;
+            bucket.lastDate = d.date;
+            bucket.n++;
+        }
+    });
+    if (bucket) weeks.push({ date: bucket.lastDate, recipientPct: bucket.recSum / bucket.n, controlPct: bucket.ctrlSum / bucket.n });
+    return weeks;
+}
+
+function buildImpactWeeklyChart(weekly, sendDate) {
+    const W = 700, H = 180, mL = 46, mR = 12, mT = 14, mB = 36;
+    const cW = W - mL - mR, cH = H - mT - mB;
+    const n  = weekly.length;
+    if (!n) return '';
+    const xScale = i => mL + (i / Math.max(n - 1, 1)) * cW;
+
+    const allVals = weekly.flatMap(d => [d.recipientPct, d.controlPct]).filter(v => v != null && v >= 0);
+    if (!allVals.length) return '';
+    const maxVal = Math.max(...allVals) * 1.35 || 1;
+    const yScale = v => mT + cH - (v / maxVal) * cH;
+
+    let recPts = '', ctrlPts = '';
+    weekly.forEach((d, i) => {
+        const x = xScale(i).toFixed(1);
+        if (d.recipientPct >= 0) recPts  += `${x},${yScale(d.recipientPct).toFixed(1)} `;
+        if (d.controlPct   >= 0) ctrlPts += `${x},${yScale(d.controlPct).toFixed(1)} `;
+    });
+
+    let yAxis = '';
+    const steps = 3;
+    for (let t = 0; t <= steps; t++) {
+        const v = (maxVal / steps) * t;
+        const y = yScale(v);
+        yAxis += `<line x1="${mL}" y1="${y.toFixed(1)}" x2="${mL+cW}" y2="${y.toFixed(1)}" stroke="#1e293b" stroke-width="1"/>`;
+        yAxis += `<text x="${(mL-6).toFixed(0)}" y="${(y+3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="#64748b">${v.toFixed(1)}%</text>`;
+    }
+
+    // X axis labels: first week, send date week, last week
+    let xAxis = '';
+    const sendIdx = sendDate ? weekly.findIndex(d => d.date >= sendDate) : -1;
+    const labeled = new Set();
+    [[0, weekly[0]?.date], [sendIdx >= 0 ? sendIdx : -1, 'Send'], [n - 1, weekly[n - 1]?.date]].forEach(([i, label]) => {
+        if (i < 0 || i >= n || labeled.has(i)) return;
+        labeled.add(i);
+        const x = xScale(i);
+        xAxis += `<line x1="${x.toFixed(1)}" y1="${(mT+cH).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(mT+cH+4).toFixed(1)}" stroke="#334155"/>`;
+        xAxis += `<text x="${x.toFixed(1)}" y="${(mT+cH+15).toFixed(1)}" text-anchor="middle" font-size="9" fill="#64748b">${label}</text>`;
+    });
+
+    let sendLine = '';
+    if (sendIdx >= 0) {
+        const sx = xScale(sendIdx);
+        sendLine = `<line x1="${sx.toFixed(1)}" y1="${mT}" x2="${sx.toFixed(1)}" y2="${(mT+cH).toFixed(1)}" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+    }
+
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;">
+        ${yAxis}
+        <line x1="${mL}" y1="${mT}" x2="${mL}" y2="${mT+cH}" stroke="#334155"/>
+        <line x1="${mL}" y1="${mT+cH}" x2="${mL+cW}" y2="${mT+cH}" stroke="#334155"/>
+        ${xAxis}
+        ${sendLine}
+        ${recPts  ? `<polyline points="${recPts.trim()}"  fill="none" stroke="#818cf8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
         ${ctrlPts ? `<polyline points="${ctrlPts.trim()}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5,3"/>` : ''}
     </svg>`;
 }
@@ -6271,66 +6727,6 @@ function renderActTrendChart(hist) {
         </div>`;
 }
 
-// ── COVERAGE MAP ──────────────────────────────────────────────────────────────
-let _coverageSignalsCache = null;
-
-async function loadCoverageMap() {
-    if (_coverageSignalsCache) { renderSignalCards(_coverageSignalsCache); return; }
-    document.getElementById('coverage-signals').innerHTML =
-        `<div style="color:var(--muted);font-size:13px;">Loading signals from Snowflake…</div>`;
-    try {
-        const r = await fetch('/api/lifecycle-signals');
-        const json = await r.json();
-        if (json.error) throw new Error(json.error);
-        _coverageSignalsCache = json.signals;
-        renderSignalCards(json.signals, json.mock);
-    } catch(e) {
-        document.getElementById('coverage-signals').innerHTML =
-            `<div style="color:#f87171;font-size:13px;">Could not load signals: ${e.message}</div>`;
-    }
-}
-
-function renderSignalCards(signals, isMock) {
-    const mockBadge = isMock ? `<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">⚠ Sample data — Snowflake connection pending</div>` : '';
-    document.getElementById('coverage-signals').innerHTML =
-        mockBadge + `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
-            ${signals.map(s => `
-            <div class="coverage-signal-card urgency-${s.urgency}">
-                <div class="sig-label">${s.label}</div>
-                <div class="sig-count" style="color:${s.urgency === 'high' ? 'var(--accent)' : 'var(--brand)'};">
-                    ${Number(s.count).toLocaleString()}
-                </div>
-                <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">workspaces</div>
-                <div style="font-size:13px;color:var(--text);">${s.description}</div>
-                <div class="sig-angle">${s.lifecycle_angle}</div>
-            </div>`).join('')}
-        </div>`;
-}
-
-async function generateCoverageAnalysis() {
-    const btn = document.getElementById('coverage-gen-btn');
-    const out = document.getElementById('coverage-analysis-output');
-    if (!_coverageSignalsCache) { out.innerHTML = `<span style="color:var(--muted);font-size:13px;">Load signals first.</span>`; return; }
-    btn.textContent = 'Analysing…'; btn.disabled = true;
-    out.innerHTML = `<div style="color:var(--muted);font-size:13px;">Reading signals and campaign history…</div>`;
-    try {
-        const { data: campaigns } = await db.from('lifecycle_campaigns')
-            .select('campaign_name,category,send_date,open_rate,notes')
-            .order('send_date', { ascending: false }).limit(60);
-        const r = await fetch('/api/claude-coverage', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ signals: _coverageSignalsCache, campaigns: campaigns || [] }),
-        });
-        const { analysis, error } = await r.json();
-        if (!analysis) throw new Error(error || 'Empty response');
-        out.innerHTML = lmRenderOutput(analysis);
-    } catch(e) {
-        out.innerHTML = `<span style="color:var(--muted);font-size:13px;">Error: ${e.message}</span>`;
-    } finally {
-        btn.textContent = '✨ Generate Coverage Analysis'; btn.disabled = false;
-    }
-}
 </script>
 <div id="spark-tip" style="position:fixed;background:#0f172a;border:1px solid #334155;border-radius:7px;padding:7px 11px;font-size:12px;color:#e2e8f0;pointer-events:none;display:none;z-index:9999;white-space:nowrap;line-height:1.4;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
 </body>
