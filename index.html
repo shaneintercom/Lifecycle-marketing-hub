@@ -205,6 +205,9 @@
         .shipped-meta { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .shipped-copy-btn { font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
         .shipped-copy-btn:hover { color: var(--text); border-color: var(--text); }
+        .shipped-child-row { display: grid; grid-template-columns: 1fr 105px 52px 90px 58px; align-items: center; gap: 10px; padding: 5px 0 5px 16px; border-bottom: 1px solid rgba(26,46,68,0.6); cursor: pointer; }
+        .shipped-child-row:hover .shipped-child-name { color: var(--primary); }
+        .shipped-child-name { font-size: 12px; color: var(--muted); font-weight: 400; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         /* ── SERIES REPLIES ── */
         .sr-recent-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; transition: border-color 0.15s, background 0.15s; max-width: 100%; }
@@ -1834,25 +1837,75 @@ function _renderShippedList() {
         return;
     }
 
-    const countLabel = `<span style="font-size:12px;color:var(--muted);margin-bottom:2px;display:block;">${shipped.length} campaign${shipped.length !== 1 ? 's' : ''} · ${label}</span>`;
+    // Group into parents and children
+    const shippedNames = new Set(shipped.map(c => c.campaign_name));
+    const parents  = shipped.filter(c => !c.parent_campaign);
+    const children = shipped.filter(c =>  c.parent_campaign);
+    const childMap = {};
+    children.forEach(c => {
+        if (!childMap[c.parent_campaign]) childMap[c.parent_campaign] = [];
+        childMap[c.parent_campaign].push(c);
+    });
+    // Children whose parent isn't in the shipped list — group under a header
+    const orphanGroups = {};
+    children.filter(c => !shippedNames.has(c.parent_campaign)).forEach(c => {
+        if (!orphanGroups[c.parent_campaign]) orphanGroups[c.parent_campaign] = [];
+        orphanGroups[c.parent_campaign].push(c);
+    });
+    const totalCount = parents.length + Object.keys(orphanGroups).length;
 
-    const rows = shipped.map(c => {
-        const cls  = (c.category || '').replace(/[\s-]/g, '').replace(/[^a-zA-Z]/g, '') || 'default';
-        const name = (c.campaign_name || '').replace(/</g, '&lt;');
-        const date = c.send_date ? fmtDate(c.send_date) : '—';
+    const countLabel = `<span style="font-size:12px;color:var(--muted);margin-bottom:2px;display:block;">${totalCount} campaign${totalCount !== 1 ? 's' : ''} · ${label}</span>`;
+
+    const rows = [];
+
+    parents.forEach(c => {
+        const cls   = (c.category || '').replace(/[\s-]/g, '').replace(/[^a-zA-Z]/g, '') || 'default';
+        const name  = (c.campaign_name || '').replace(/</g, '&lt;');
+        const date  = c.send_date ? fmtDate(c.send_date) : '—';
         const owner = c.created_by ? c.created_by.split(',')[0].trim().split(' ')[0] : '';
-        return `<div class="shipped-row" data-id="${c.campaign_id}">
+        rows.push(`<div class="shipped-row" data-id="${c.campaign_id}">
             <span class="shipped-name" title="${name}">${name}</span>
             <span class="shipped-pill cal-event-${cls}">${c.category || 'Uncategorised'}</span>
             <span class="shipped-meta">${c.channel || '—'}</span>
             <span class="shipped-meta">${date}</span>
             <span class="shipped-meta">${owner || '—'}</span>
-        </div>`;
-    }).join('');
+        </div>`);
+        (childMap[c.campaign_name] || []).forEach(child => {
+            const childName = (child.campaign_name || '').replace(/</g, '&lt;');
+            const childDate = child.send_date ? fmtDate(child.send_date) : '—';
+            rows.push(`<div class="shipped-child-row" data-id="${child.campaign_id}">
+                <span class="shipped-child-name" title="${childName}">↳ ${childName}</span>
+                <span class="shipped-meta" style="font-size:10px;">${child.category || '—'}</span>
+                <span class="shipped-meta" style="font-size:10px;">${child.channel || '—'}</span>
+                <span class="shipped-meta" style="font-size:10px;">${childDate}</span>
+                <span></span>
+            </div>`);
+        });
+    });
 
-    el.innerHTML = countLabel + rows;
+    // Orphaned children — parent outside the current date range
+    Object.entries(orphanGroups).forEach(([parentName, kids]) => {
+        rows.push(`<div class="shipped-row" style="cursor:default;">
+            <span class="shipped-name" title="${parentName.replace(/</g,'&lt;')}">${parentName.replace(/</g,'&lt;')}</span>
+            <span></span><span></span><span></span><span></span>
+        </div>`);
+        kids.forEach(child => {
+            const childName = (child.campaign_name || '').replace(/</g, '&lt;');
+            const childCls  = (child.category || '').replace(/[\s-]/g, '').replace(/[^a-zA-Z]/g, '') || 'default';
+            const childDate = child.send_date ? fmtDate(child.send_date) : '—';
+            rows.push(`<div class="shipped-child-row" data-id="${child.campaign_id}">
+                <span class="shipped-child-name" title="${childName}">↳ ${childName}</span>
+                <span class="shipped-pill cal-event-${childCls}" style="font-size:10px;">${child.category || 'Uncategorised'}</span>
+                <span class="shipped-meta" style="font-size:10px;">${child.channel || '—'}</span>
+                <span class="shipped-meta" style="font-size:10px;">${childDate}</span>
+                <span></span>
+            </div>`);
+        });
+    });
 
-    el.querySelectorAll('.shipped-row').forEach(row => {
+    el.innerHTML = countLabel + rows.join('');
+
+    el.querySelectorAll('[data-id]').forEach(row => {
         row.addEventListener('click', () => {
             const campaign = _shippedAll.find(c => c.campaign_id === row.dataset.id);
             if (campaign) showCampaignModal(campaign);
@@ -1868,10 +1921,35 @@ function _copyShippedList() {
 
     if (!shipped.length) { alert('Nothing shipped in this period.'); return; }
 
-    const lines = [
-        `*Lifecycle shipped · ${label}* (${shipped.length} campaign${shipped.length !== 1 ? 's' : ''})`,
-        ...shipped.map(c => `• ${c.campaign_name}${c.category ? ' (' + c.category + ')' : ''}${c.send_date ? ' · ' + fmtDate(c.send_date) : ''}`),
-    ];
+    const shippedNames = new Set(shipped.map(c => c.campaign_name));
+    const parents  = shipped.filter(c => !c.parent_campaign);
+    const children = shipped.filter(c =>  c.parent_campaign);
+    const childMap = {};
+    children.forEach(c => {
+        if (!childMap[c.parent_campaign]) childMap[c.parent_campaign] = [];
+        childMap[c.parent_campaign].push(c);
+    });
+    const orphanGroups = {};
+    children.filter(c => !shippedNames.has(c.parent_campaign)).forEach(c => {
+        if (!orphanGroups[c.parent_campaign]) orphanGroups[c.parent_campaign] = [];
+        orphanGroups[c.parent_campaign].push(c);
+    });
+    const totalCount = parents.length + Object.keys(orphanGroups).length;
+
+    const lines = [`*Lifecycle shipped · ${label}* (${totalCount} campaign${totalCount !== 1 ? 's' : ''})`];
+    parents.forEach(c => {
+        lines.push(`• ${c.campaign_name}${c.category ? ' (' + c.category + ')' : ''}${c.send_date ? ' · ' + fmtDate(c.send_date) : ''}`);
+        (childMap[c.campaign_name] || []).forEach(child => {
+            lines.push(`   ↳ ${child.campaign_name}${child.send_date ? ' · ' + fmtDate(child.send_date) : ''}`);
+        });
+    });
+    Object.entries(orphanGroups).forEach(([parentName, kids]) => {
+        lines.push(`• ${parentName}`);
+        kids.forEach(child => {
+            lines.push(`   ↳ ${child.campaign_name}${child.send_date ? ' · ' + fmtDate(child.send_date) : ''}`);
+        });
+    });
+
     navigator.clipboard.writeText(lines.join('\n')).then(() => {
         const btn = document.getElementById('shipped-copy-btn');
         btn.textContent = 'Copied!';
