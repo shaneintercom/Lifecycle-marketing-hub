@@ -2249,7 +2249,18 @@ function buildMonthGrid(year, month) {
     for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
         const isToday = isCurrent && today.getDate() === d;
-        const events  = calData.filter(c => c.send_date === dateStr);
+        const dayCampaigns = calData.filter(c => c.send_date === dateStr);
+        // Dedup by campaign_name (case-insensitive, trimmed). Prefer the row with metrics.
+        const _seen = new Map();
+        for (const c of dayCampaigns) {
+            const k = (c.campaign_name || '').trim().toLowerCase();
+            if (!k) continue;
+            const existing = _seen.get(k);
+            if (!existing) { _seen.set(k, c); continue; }
+            const score = (x) => (x.open_rate != null ? 2 : 0) + (x.emails_sent != null ? 1 : 0);
+            if (score(c) > score(existing)) _seen.set(k, c);
+        }
+        const events = Array.from(_seen.values());
         const dateEl  = isToday
             ? `<div class="cal-date"><span class="cal-date-today">${d}</span></div>`
             : `<div class="cal-date">${d}</div>`;
@@ -3119,7 +3130,46 @@ function showSyncToast(msg) {
     toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 3500);
 }
 
+// Find rows in Supabase with the same (campaign_name, send_date) and remove all but the
+// "best" one (keeps the row carrying metrics). Returns number of rows deleted.
+async function dedupExistingCampaigns() {
+    const { data: all } = await db.from('lifecycle_campaigns')
+        .select('campaign_id, campaign_name, send_date, open_rate, emails_sent, notes, parent_campaign');
+    if (!all || all.length < 2) return 0;
+
+    const groups = new Map();
+    for (const c of all) {
+        const name = (c.campaign_name || '').trim().toLowerCase();
+        const date = c.send_date || '';
+        if (!name || !date) continue;
+        const k = `${name}|${date}`;
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(c);
+    }
+
+    const score = (x) => (x.open_rate != null ? 4 : 0)
+                       + (x.emails_sent != null ? 2 : 0)
+                       + (x.notes ? 1 : 0)
+                       + (x.parent_campaign ? 1 : 0);
+
+    const toDelete = [];
+    for (const [, rows] of groups) {
+        if (rows.length < 2) continue;
+        rows.sort((a, b) => score(b) - score(a) || a.campaign_id - b.campaign_id);
+        for (const r of rows.slice(1)) toDelete.push(r.campaign_id);
+    }
+    if (!toDelete.length) return 0;
+    await db.from('lifecycle_campaigns').delete().in('campaign_id', toDelete);
+    return toDelete.length;
+}
+
+let _silentSyncRunning = false;
 async function silentSyncFromCoda() {
+    if (_silentSyncRunning) return;
+    _silentSyncRunning = true;
+    try {
+    const cleaned = await dedupExistingCampaigns();
+    if (cleaned) showSyncToast(`✓ Removed ${cleaned} duplicate${cleaned !== 1 ? 's' : ''}`);
     let rows;
     try { rows = await fetchAllCodaRows(); } catch(e) { return; }
 
@@ -3192,7 +3242,7 @@ async function silentSyncFromCoda() {
             const { error } = await db.from('lifecycle_campaigns').insert(insertRows);
             if (error) return;
         }
-        const added = toInsert.length, moved = dateUpdates.length;
+        const added = toInsert.length, moved = dateUpdateOps.length;
         const msg = [added && `${added} new`, moved && `${moved} date${moved!==1?'s':''} updated`].filter(Boolean).join(', ');
         if (msg) showSyncToast(`↓ ${msg} from Coda`);
     }
@@ -3221,6 +3271,9 @@ async function silentSyncFromCoda() {
     }
 
     await loadCalendar();
+    } finally {
+        _silentSyncRunning = false;
+    }
 }
 
 const CODA_TOKEN    = '26173d1f-8559-40b2-bbce-816dc69b748d';
@@ -3268,7 +3321,10 @@ async function fetchAllCodaRows() {
 async function syncFromCoda() {
     const panel = document.getElementById('coda-sync-panel');
     panel.style.display = 'block';
-    panel.innerHTML = `<div class="sync-panel"><p style="color:var(--muted);font-size:13px;">Fetching from Coda FY27 Roadmap...</p></div>`;
+    panel.innerHTML = `<div class="sync-panel"><p style="color:var(--muted);font-size:13px;">Cleaning duplicates and fetching from Coda FY27 Roadmap...</p></div>`;
+
+    const cleaned = await dedupExistingCampaigns();
+    if (cleaned) showSyncToast(`✓ Removed ${cleaned} duplicate${cleaned !== 1 ? 's' : ''}`);
 
     let rows;
     try {
