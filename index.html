@@ -584,11 +584,21 @@
                     <button class="shipped-range-btn active" data-range="last-week">Last week</button>
                     <button class="shipped-range-btn" data-range="this-month">This month</button>
                     <button class="shipped-range-btn" data-range="last-month">Last month</button>
+                    <button class="shipped-range-btn" data-range="last-quarter">Last quarter</button>
                     <button class="shipped-range-btn" data-range="this-quarter">This quarter</button>
                     <button class="shipped-copy-btn" id="shipped-copy-btn" title="Copy list for Slack">Copy</button>
                 </div>
             </div>
             <div id="dash-shipped" class="dash-stat-card" style="padding:0 16px;"></div>
+        </div>
+
+        <!-- Quarterly throughput -->
+        <div style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <div class="dash-section-label" style="margin:0;">Quarterly throughput</div>
+                <div id="dash-throughput-meta" style="font-size:11px;color:var(--muted);"></div>
+            </div>
+            <div id="dash-throughput" class="dash-stat-card" style="padding:18px 18px 14px;"><div style="color:var(--muted);font-size:13px;">Loading…</div></div>
         </div>
 
         <!-- Upcoming Product Launches -->
@@ -1415,13 +1425,18 @@ function val(id)    { return document.getElementById(id).value.trim() || null; }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
-    const [{ data: q1Data }, { data: q4Data }, { data: allData }, { data: abData }, { data: backlogData }, { data: trendData }] = await Promise.all([
+    const [{ data: q1Data }, { data: q4Data }, { data: allData }, { data: abData }, { data: backlogData }, { data: trendData }, { data: throughputData }] = await Promise.all([
         db.from('lifecycle_campaigns').select('*').order('send_date', { ascending: false }).gte('send_date', '2026-02-01'),
         db.from('lifecycle_campaigns').select('emails_sent,emails_sent_b,open_rate,click_rate,click_to_open_rate,parent_campaign').gte('send_date', '2025-11-01').lt('send_date', '2026-02-01'),
         db.from('lifecycle_campaigns').select('category,open_rate,click_rate,click_to_open_rate,emails_sent'),
         db.from('lifecycle_ab_tests').select('test_id,test_name,winner,winner_notes,test_date,element_tested,variant_a_name,variant_b_name,variant_a_open_rate,variant_b_open_rate,variant_a_click_rate,variant_b_click_rate,sent_a,sent_b').order('test_date', { ascending: false }),
         db.from('lifecycle_experiment_backlog').select('id,status'),
         db.from('lifecycle_campaigns').select('send_date,open_rate,click_rate,click_to_open_rate,emails_sent,emails_sent_b').gte('send_date', '2025-10-01').not('open_rate', 'is', null),
+        // Quarterly throughput: lightweight pull of all shippable rows since FY25 Q1 (Feb 2024)
+        db.from('lifecycle_campaigns')
+          .select('campaign_name,send_date,notes,created_by,parent_campaign,category')
+          .not('send_date', 'is', null)
+          .gte('send_date', '2024-02-01'),
     ]);
 
     const q1  = q1Data  || [];
@@ -1435,6 +1450,7 @@ async function loadDashboard() {
     renderBacklogSnapshot(backlogData || []);
     renderBenchmarkGrid(q1, all);
     renderShipped(q1);
+    renderQuarterlyThroughput(throughputData || []);
     renderUpcomingLaunches();
 }
 
@@ -1729,18 +1745,54 @@ function getShippedDateRange(range) {
         const to   = new Date(today.getFullYear(), today.getMonth(), 0);
         return { from: fmt(from), to: fmt(to), label: CAL_MONTHS[from.getMonth()] + ' ' + from.getFullYear() };
     }
-    if (range === 'this-quarter') {
+    if (range === 'this-quarter' || range === 'last-quarter') {
         // Intercom fiscal quarters: Q1 Feb–Apr, Q2 May–Jul, Q3 Aug–Oct, Q4 Nov–Jan
-        const m = today.getMonth(); // 0-indexed
-        let qStart, qEnd, qLabel;
-        if (m >= 1 && m <= 3)       { qStart = new Date(today.getFullYear(), 1, 1);  qEnd = new Date(today.getFullYear(), 3, 30);  qLabel = 'Q1'; }
-        else if (m >= 4 && m <= 6)  { qStart = new Date(today.getFullYear(), 4, 1);  qEnd = new Date(today.getFullYear(), 6, 31);  qLabel = 'Q2'; }
-        else if (m >= 7 && m <= 9)  { qStart = new Date(today.getFullYear(), 7, 1);  qEnd = new Date(today.getFullYear(), 9, 31);  qLabel = 'Q3'; }
-        else                        { qStart = m >= 10 ? new Date(today.getFullYear(), 10, 1) : new Date(today.getFullYear() - 1, 10, 1);
-                                      qEnd   = m >= 10 ? new Date(today.getFullYear() + 1, 0, 31) : new Date(today.getFullYear(), 0, 31);
-                                      qLabel = 'Q4'; }
-        return { from: fmt(qStart), to: fmt(qEnd), label: `${qLabel} FY${String(qEnd.getFullYear()).slice(-2)}` };
+        const offset = range === 'last-quarter' ? -1 : 0;
+        return quarterRangeFor(today, offset);
     }
+}
+
+// Compute a quarter range for "this quarter offset by N" relative to a reference date.
+// offset=0 → this quarter, offset=-1 → last quarter, offset=-2 → two quarters ago, etc.
+function quarterRangeFor(refDate, offset = 0) {
+    const fmt = d => d.toISOString().slice(0, 10);
+    const m = refDate.getMonth();
+    const y = refDate.getFullYear();
+    // Map to current Intercom quarter index, where Q1 of any year = (year, 1)
+    let qNum, qYear;
+    if (m >= 1 && m <= 3)       { qNum = 1; qYear = y; }
+    else if (m >= 4 && m <= 6)  { qNum = 2; qYear = y; }
+    else if (m >= 7 && m <= 9)  { qNum = 3; qYear = y; }
+    else if (m >= 10)           { qNum = 4; qYear = y; }     // Nov/Dec → Q4 starting this year
+    else                        { qNum = 4; qYear = y - 1; } // Jan → Q4 that started prev year
+
+    // Apply offset
+    let idx = (qYear * 4) + (qNum - 1) + offset;
+    let outYear = Math.floor(idx / 4);
+    let outQ    = (idx % 4) + 1;
+    if (outQ < 1) { outQ += 4; outYear -= 1; }
+
+    let qStart, qEnd;
+    if (outQ === 1)      { qStart = new Date(outYear, 1, 1);  qEnd = new Date(outYear, 3, 30); }
+    else if (outQ === 2) { qStart = new Date(outYear, 4, 1);  qEnd = new Date(outYear, 6, 31); }
+    else if (outQ === 3) { qStart = new Date(outYear, 7, 1);  qEnd = new Date(outYear, 9, 31); }
+    else                 { qStart = new Date(outYear, 10, 1); qEnd = new Date(outYear + 1, 0, 31); }
+    const fyLabelYear = qEnd.getFullYear();  // matches existing convention so labels stay consistent
+    return { from: fmt(qStart), to: fmt(qEnd), label: `Q${outQ} FY${String(fyLabelYear).slice(-2)}` };
+}
+
+// Map any date to its quarter info (matches the convention used by quarterRangeFor).
+function quarterInfoForDate(dateStr) {
+    const d = new Date(dateStr);
+    const m = d.getMonth();
+    const y = d.getFullYear();
+    let qNum, fyLabelYear;
+    if (m >= 1 && m <= 3)       { qNum = 1; fyLabelYear = y; }
+    else if (m >= 4 && m <= 6)  { qNum = 2; fyLabelYear = y; }
+    else if (m >= 7 && m <= 9)  { qNum = 3; fyLabelYear = y; }
+    else if (m >= 10)           { qNum = 4; fyLabelYear = y + 1; }
+    else                        { qNum = 4; fyLabelYear = y; }
+    return { qNum, fyLabelYear, label: `Q${qNum} FY${String(fyLabelYear).slice(-2)}` };
 }
 
 function renderShipped(campaigns) {
@@ -1761,6 +1813,96 @@ function renderShipped(campaigns) {
 
 function _isShipped(c) {
     return c.notes && c.notes.split('·').map(s => s.trim()).some(s => s.toLowerCase() === 'done');
+}
+
+// Render a horizontal bar chart of campaigns shipped per quarter going back ~6 quarters.
+// Each bar shows: total count + delta vs prior quarter. Current quarter is highlighted.
+function renderQuarterlyThroughput(rows) {
+    const el = document.getElementById('dash-throughput');
+    if (!el) return;
+    const shipped = (rows || []).filter(r => r.send_date && _isShipped(r));
+
+    // Group by quarter label
+    const byQuarter = new Map();
+    for (const r of shipped) {
+        const info = quarterInfoForDate(r.send_date);
+        if (!byQuarter.has(info.label)) {
+            byQuarter.set(info.label, {
+                label: info.label,
+                qNum: info.qNum,
+                fyLabelYear: info.fyLabelYear,
+                count: 0,
+                campaigns: [],
+            });
+        }
+        const q = byQuarter.get(info.label);
+        q.count++;
+        q.campaigns.push(r);
+    }
+
+    // Sort chronologically using a synthetic key (FY end year × 10 + quarter num)
+    const sorted = Array.from(byQuarter.values())
+        .sort((a, b) => (a.fyLabelYear - b.fyLabelYear) || (a.qNum - b.qNum));
+
+    if (!sorted.length) {
+        el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:6px 0;">No shipped campaigns logged yet.</div>`;
+        return;
+    }
+
+    // Show last 6 quarters max — older are accessible via the full list scroll if needed
+    const view = sorted.slice(-6);
+    const max  = Math.max(...view.map(q => q.count), 1);
+
+    // Determine the "current" quarter so we can highlight it
+    const now = new Date();
+    const currentLabel = quarterRangeFor(now, 0).label;
+
+    const rowsHtml = view.map((q, idx) => {
+        const prev = idx > 0 ? view[idx - 1] : null;
+        let delta = '';
+        if (prev) {
+            const d = q.count - prev.count;
+            const pct = prev.count ? Math.round((d / prev.count) * 100) : null;
+            if (d > 0) delta = `<span style="color:#10b981;font-weight:600;">+${d}${pct !== null ? ` · +${pct}%` : ''}</span>`;
+            else if (d < 0) delta = `<span style="color:#fcd34d;font-weight:600;">${d}${pct !== null ? ` · ${pct}%` : ''}</span>`;
+            else delta = `<span style="color:var(--muted);">flat</span>`;
+        } else {
+            delta = `<span style="color:var(--muted);">baseline</span>`;
+        }
+        const pct  = (q.count / max) * 100;
+        const isCurrent = q.label === currentLabel;
+        const barColor = isCurrent ? 'var(--brand)' : '#3b4a63';
+        const labelStyle = isCurrent ? 'color:var(--text);font-weight:700;' : 'color:var(--muted);font-weight:600;';
+        const ongoing = isCurrent ? `<span style="font-size:10px;color:var(--brand);font-weight:600;margin-left:6px;text-transform:uppercase;letter-spacing:0.05em;">in progress</span>` : '';
+        return `
+        <div style="display:grid;grid-template-columns:80px 1fr 64px 120px;gap:12px;align-items:center;padding:6px 0;">
+            <div style="font-size:12px;${labelStyle}">${q.label}${ongoing}</div>
+            <div style="height:18px;background:#0f1c30;border-radius:4px;position:relative;overflow:hidden;">
+                <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:${barColor};border-radius:4px;transition:width 0.4s;"></div>
+            </div>
+            <div style="font-size:16px;font-weight:700;text-align:right;color:var(--text);">${q.count}</div>
+            <div style="font-size:11px;text-align:right;">${delta}</div>
+        </div>`;
+    }).join('');
+
+    el.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Campaigns shipped per quarter</div>
+            <div style="font-size:11px;color:var(--muted);">last ${view.length} quarter${view.length !== 1 ? 's' : ''}</div>
+        </div>
+        ${rowsHtml}
+    `;
+
+    // Meta line above the card: total YoY trajectory in one sentence
+    const meta = document.getElementById('dash-throughput-meta');
+    if (meta && view.length >= 2) {
+        const first = view[0], last = view[view.length - 1];
+        const d = last.count - first.count;
+        const pct = first.count ? Math.round((d / first.count) * 100) : null;
+        const dir = d > 0 ? '↑' : d < 0 ? '↓' : '→';
+        const arrowColor = d > 0 ? '#10b981' : d < 0 ? '#fcd34d' : 'var(--muted)';
+        meta.innerHTML = `<span style="color:${arrowColor};font-weight:700;">${dir} ${Math.abs(d)} campaign${Math.abs(d) !== 1 ? 's' : ''}${pct !== null ? ` (${pct >= 0 ? '+' : ''}${pct}%)` : ''}</span> · ${first.label} → ${last.label}`;
+    }
 }
 
 function _renderShippedList() {
