@@ -6303,7 +6303,17 @@ async function analyseSeriesReplies() {
                 sourceContext: _srSourceCtx,
             }),
         });
-        const data = await res.json();
+        // Vercel returns plain text (e.g. "An error occurred...") when the function
+        // times out or crashes. Detect that before attempting JSON.parse.
+        const raw = await res.text();
+        let data;
+        try { data = JSON.parse(raw); }
+        catch (e) {
+            const looksLikeTimeout = /An error occurred|timed out|504|gateway/i.test(raw);
+            throw new Error(looksLikeTimeout
+                ? `Analysis took too long (likely Vercel function timeout). Try a more focused question or reload to retry — we sent ${_srReplies.length} replies.`
+                : `Unexpected server response: ${raw.slice(0, 160)}`);
+        }
         if (!res.ok || data.error) throw new Error(data.error || 'Analysis failed');
 
         const rendered = renderSRMarkdown(data.analysis);

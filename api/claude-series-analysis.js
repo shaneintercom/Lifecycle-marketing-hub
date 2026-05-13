@@ -19,7 +19,10 @@ async function analyseReplies(req, res) {
   if (!replies || !replies.length) return res.status(400).json({ error: 'No replies provided.' });
   if (!question || !question.trim()) return res.status(400).json({ error: 'No question provided.' });
 
-  const MAX_REPLIES = 800;
+  // Tuned to land safely under Vercel 60s timeout on Sonnet 4.6:
+  // 400 replies × ~250 tokens each ≈ 100k input tokens. Sonnet returns ~3k output
+  // in 25-45s typically. Headroom for slow API responses.
+  const MAX_REPLIES = 400;
   const sorted = [...replies].sort((a, b) => (b.replyDate || 0) - (a.replyDate || 0));
   const sampled = sorted.slice(0, MAX_REPLIES);
   const trimmed = replies.length > MAX_REPLIES;
@@ -28,7 +31,7 @@ async function analyseReplies(req, res) {
     const date = r.replyDate
       ? new Date(r.replyDate * 1000).toISOString().slice(0, 10)
       : '—';
-    const body = (r.replyText || '').slice(0, 1200);
+    const body = (r.replyText || '').slice(0, 800);
     return `Reply ${i + 1} [${date} · ${r.contactName || 'Unknown'}]: ${body}`;
   }).join('\n\n');
 
@@ -77,7 +80,7 @@ End cleanly. No closing remarks, no "let me know if you need more." This will be
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4000,
+        max_tokens: 3000,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       }),
