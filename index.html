@@ -1858,48 +1858,52 @@ function getShippedDateRange(range) {
     }
 }
 
+// Intercom fiscal calendar:
+//   Q1 = Nov-Jan, Q2 = Feb-Apr, Q3 = May-Jul, Q4 = Aug-Oct
+//   FY{N} runs Nov of {N-1} to Oct of {N}. So Q1 FY26 = Nov 2025-Jan 2026.
+//
 // Compute a quarter range for "this quarter offset by N" relative to a reference date.
 // offset=0 → this quarter, offset=-1 → last quarter, offset=-2 → two quarters ago, etc.
 function quarterRangeFor(refDate, offset = 0) {
     const fmt = d => d.toISOString().slice(0, 10);
     const m = refDate.getMonth();
     const y = refDate.getFullYear();
-    // Map to current Intercom quarter index, where Q1 of any year = (year, 1)
-    let qNum, qYear;
-    if (m >= 1 && m <= 3)       { qNum = 1; qYear = y; }
-    else if (m >= 4 && m <= 6)  { qNum = 2; qYear = y; }
-    else if (m >= 7 && m <= 9)  { qNum = 3; qYear = y; }
-    else if (m >= 10)           { qNum = 4; qYear = y; }     // Nov/Dec → Q4 starting this year
-    else                        { qNum = 4; qYear = y - 1; } // Jan → Q4 that started prev year
+    // Map ref date to current quarter. fyYear is the FY label year (e.g. 2026 for FY26).
+    let qNum, fyYear;
+    if (m === 10 || m === 11)   { qNum = 1; fyYear = y + 1; }   // Nov/Dec → Q1 of next FY
+    else if (m === 0)           { qNum = 1; fyYear = y; }       // Jan     → Q1 of this FY
+    else if (m >= 1 && m <= 3)  { qNum = 2; fyYear = y; }       // Feb-Apr → Q2
+    else if (m >= 4 && m <= 6)  { qNum = 3; fyYear = y; }       // May-Jul → Q3
+    else                        { qNum = 4; fyYear = y; }       // Aug-Oct → Q4
 
-    // Apply offset
-    let idx = (qYear * 4) + (qNum - 1) + offset;
-    let outYear = Math.floor(idx / 4);
-    let outQ    = (idx % 4) + 1;
-    if (outQ < 1) { outQ += 4; outYear -= 1; }
+    // Apply offset on a continuous (fyYear * 4 + qIdx) index.
+    let idx = fyYear * 4 + (qNum - 1) + offset;
+    let outFy = Math.floor(idx / 4);
+    let outQ  = (idx % 4) + 1;
+    if (outQ < 1) { outQ += 4; outFy -= 1; }
 
     let qStart, qEnd;
-    if (outQ === 1)      { qStart = new Date(outYear, 1, 1);  qEnd = new Date(outYear, 3, 30); }
-    else if (outQ === 2) { qStart = new Date(outYear, 4, 1);  qEnd = new Date(outYear, 6, 31); }
-    else if (outQ === 3) { qStart = new Date(outYear, 7, 1);  qEnd = new Date(outYear, 9, 31); }
-    else                 { qStart = new Date(outYear, 10, 1); qEnd = new Date(outYear + 1, 0, 31); }
-    const fyLabelYear = qEnd.getFullYear();  // matches existing convention so labels stay consistent
-    return { from: fmt(qStart), to: fmt(qEnd), label: `Q${outQ} FY${String(fyLabelYear).slice(-2)}` };
+    if (outQ === 1)      { qStart = new Date(outFy - 1, 10, 1); qEnd = new Date(outFy, 0, 31); }   // Nov(Y-1) – Jan(Y)
+    else if (outQ === 2) { qStart = new Date(outFy, 1, 1);      qEnd = new Date(outFy, 3, 30); }   // Feb – Apr
+    else if (outQ === 3) { qStart = new Date(outFy, 4, 1);      qEnd = new Date(outFy, 6, 31); }   // May – Jul
+    else                 { qStart = new Date(outFy, 7, 1);      qEnd = new Date(outFy, 9, 31); }   // Aug – Oct
+
+    return { from: fmt(qStart), to: fmt(qEnd), label: `Q${outQ} FY${String(outFy).slice(-2)}` };
 }
 
 // Map any date to its quarter info (matches the convention used by quarterRangeFor).
 // sortKey orders quarters chronologically by their actual start month — needed because
-// the FY label year jumps at Q4 (which spans Nov-Jan) so sorting by FY label is wrong.
+// the FY label year jumps between Q1 (Nov-Jan) and Q2-Q4 so sorting by FY label is wrong.
 function quarterInfoForDate(dateStr) {
     const d = new Date(dateStr);
     const m = d.getMonth();
     const y = d.getFullYear();
     let qNum, fyLabelYear, qStartYear, qStartMonth;
-    if (m >= 1 && m <= 3)       { qNum = 1; fyLabelYear = y;     qStartYear = y;     qStartMonth = 1; }
-    else if (m >= 4 && m <= 6)  { qNum = 2; fyLabelYear = y;     qStartYear = y;     qStartMonth = 4; }
-    else if (m >= 7 && m <= 9)  { qNum = 3; fyLabelYear = y;     qStartYear = y;     qStartMonth = 7; }
-    else if (m >= 10)           { qNum = 4; fyLabelYear = y + 1; qStartYear = y;     qStartMonth = 10; }
-    else                        { qNum = 4; fyLabelYear = y;     qStartYear = y - 1; qStartMonth = 10; }
+    if (m === 10 || m === 11)   { qNum = 1; fyLabelYear = y + 1; qStartYear = y;     qStartMonth = 10; }  // Nov/Dec
+    else if (m === 0)           { qNum = 1; fyLabelYear = y;     qStartYear = y - 1; qStartMonth = 10; }  // Jan
+    else if (m >= 1 && m <= 3)  { qNum = 2; fyLabelYear = y;     qStartYear = y;     qStartMonth = 1;  }  // Feb-Apr
+    else if (m >= 4 && m <= 6)  { qNum = 3; fyLabelYear = y;     qStartYear = y;     qStartMonth = 4;  }  // May-Jul
+    else                        { qNum = 4; fyLabelYear = y;     qStartYear = y;     qStartMonth = 7;  }  // Aug-Oct
     return {
         qNum, fyLabelYear, qStartYear, qStartMonth,
         label: `Q${qNum} FY${String(fyLabelYear).slice(-2)}`,
@@ -1956,6 +1960,7 @@ function renderQuarterlyThroughput(rows) {
                 label: info.label,
                 qNum: info.qNum,
                 fyLabelYear: info.fyLabelYear,
+                sortKey: info.sortKey,
                 count: 0,
                 campaigns: [],
             });
@@ -1965,32 +1970,29 @@ function renderQuarterlyThroughput(rows) {
         q.campaigns.push(r);
     }
 
-    // Sort chronologically by actual quarter-start (NOT by FY label, which jumps at Q4)
+    // Always inject the current quarter plus the previous 3 as zero-count placeholders so
+    // the chart shows a consistent 4-quarter window even when a quarter has no shipped data yet.
+    const today = new Date();
+    for (const off of [0, -1, -2, -3]) {
+        const q = quarterRangeFor(today, off);
+        if (!byQuarter.has(q.label)) {
+            const info = quarterInfoForDate(q.from);
+            byQuarter.set(q.label, {
+                label: q.label,
+                qNum: info.qNum,
+                fyLabelYear: info.fyLabelYear,
+                sortKey: info.sortKey,
+                count: 0,
+                campaigns: [],
+            });
+        }
+    }
+
+    // Sort chronologically by actual quarter-start (NOT by FY label, which jumps between Q1/Q2)
     const sorted = Array.from(byQuarter.values())
         .sort((a, b) => a.sortKey - b.sortKey);
 
-    if (!sorted.length) {
-        el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:6px 0;">No shipped campaigns logged yet.</div>`;
-        return;
-    }
-
-    // Ensure the current quarter is shown even with zero shipped campaigns so the
-    // "in progress" bar always appears at the right edge.
-    const today = new Date();
-    const currentInfo = quarterInfoForDate(today.toISOString().slice(0, 10));
-    if (!byQuarter.has(currentInfo.label)) {
-        sorted.push({
-            label: currentInfo.label,
-            qNum: currentInfo.qNum,
-            fyLabelYear: currentInfo.fyLabelYear,
-            sortKey: currentInfo.sortKey,
-            count: 0,
-            campaigns: [],
-        });
-        sorted.sort((a, b) => a.sortKey - b.sortKey);
-    }
-
-    // Show last 4 quarters (current + 3 previous), oldest on the left, newest on the right
+    // Show the most recent 4 quarters (current + 3 previous), oldest on the left
     const view = sorted.slice(-4);
     const max  = Math.max(...view.map(q => q.count), 1);
 
