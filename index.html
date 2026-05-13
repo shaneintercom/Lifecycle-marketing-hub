@@ -5968,6 +5968,36 @@ function renderSRSources() {
     document.getElementById('sr-sources').style.display = 'block';
 }
 
+let _srLoadCancelled = false;
+
+function renderSRRepliesList(replies) {
+    const tbody = document.getElementById('sr-replies-body');
+    if (!replies.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted);">No customer replies found yet.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = replies.map(r => {
+        const date = r.replyDate ? new Date(r.replyDate * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+        const isTruncated = r.replyText.length > 280;
+        const text = isTruncated ? r.replyText.slice(0, 280) + '…' : r.replyText;
+        const hoverAttrs = isTruncated
+            ? `onmouseenter="srShowTooltip(this,event)" onmouseleave="srHideTooltip()" data-full="${escHtml(r.replyText)}" style="font-size:13px;color:var(--text);cursor:help;"`
+            : `style="font-size:13px;color:var(--text);"`;
+        return `<tr>
+            <td style="white-space:nowrap;vertical-align:top;">
+                <div style="font-weight:600;font-size:13px;">${escHtml(r.contactName)}</div>
+                ${r.contactEmail ? `<div style="font-size:11px;color:var(--muted);">${escHtml(r.contactEmail)}</div>` : ''}
+            </td>
+            <td ${hoverAttrs}>${escHtml(text)}</td>
+            <td style="white-space:nowrap;font-size:12px;color:var(--muted);">${date}</td>
+        </tr>`;
+    }).join('');
+}
+
+function cancelSRLoad() {
+    _srLoadCancelled = true;
+}
+
 async function loadSRReplies(idx) {
     const src = _srSources[idx];
     if (!src) return;
@@ -5977,7 +6007,9 @@ async function loadSRReplies(idx) {
 
     const subj = src.subject || src.bodySnippet || '(no subject)';
     document.getElementById('sr-selected-subject').textContent = subj.length > 100 ? subj.slice(0, 100) + '…' : subj;
-    document.getElementById('sr-selected-meta').textContent = `From: ${src.senderName} · Loading replies…`;
+
+    const metaEl = document.getElementById('sr-selected-meta');
+    metaEl.innerHTML = `From: ${escHtml(src.senderName)} · Fetching replies… <button class="btn-sm" onclick="cancelSRLoad()" style="margin-left:10px;font-size:11px;">Stop</button>`;
 
     const tbody = document.getElementById('sr-replies-body');
     tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted);">Fetching replies…</td></tr>';
@@ -5986,59 +6018,65 @@ async function loadSRReplies(idx) {
 
     _srSourceCtx = src.subject ? `Subject: "${src.subject}" · Sender: ${src.senderName}` : `Sender: ${src.senderName} · Message: ${src.bodySnippet}`;
 
-    const renderReplies = (replies, total) => {
-        const sampled = Math.min(total, 50);
-        const metaParts = [
-            `Sent by: ${src.senderName}`,
-            `${replies.length} customer repl${replies.length !== 1 ? 'ies' : 'y'} found`,
-            `sampled ${sampled} of ${total} conversation${total !== 1 ? 's' : ''}`,
-        ];
-        document.getElementById('sr-selected-meta').textContent = metaParts.join(' · ');
-        _srSources[idx].loadedReplies  = replies.length;
-        _srSources[idx].loadedSampled  = sampled;
-        _srSources[idx].loadedTotal    = total;
-        _srSources[idx]._cachedReplies = replies;
-        _srReplies = replies;
-        if (!replies.length) {
-            tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted);">No customer replies found for this message.</td></tr>';
-            return;
-        }
-        tbody.innerHTML = replies.map(r => {
-            const date = r.replyDate ? new Date(r.replyDate * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-            const isTruncated = r.replyText.length > 280;
-            const text = isTruncated ? r.replyText.slice(0, 280) + '…' : r.replyText;
-            const hoverAttrs = isTruncated
-                ? `onmouseenter="srShowTooltip(this,event)" onmouseleave="srHideTooltip()" data-full="${escHtml(r.replyText)}" style="font-size:13px;color:var(--text);cursor:help;"`
-                : `style="font-size:13px;color:var(--text);"`;
-            return `<tr>
-                <td style="white-space:nowrap;vertical-align:top;">
-                    <div style="font-weight:600;font-size:13px;">${escHtml(r.contactName)}</div>
-                    ${r.contactEmail ? `<div style="font-size:11px;color:var(--muted);">${escHtml(r.contactEmail)}</div>` : ''}
-                </td>
-                <td ${hoverAttrs}>${escHtml(text)}</td>
-                <td style="white-space:nowrap;font-size:12px;color:var(--muted);">${date}</td>
-            </tr>`;
-        }).join('');
-    };
-
-    // Use cached data if the prefetch already loaded this source
     if (src._cachedReplies) {
-        renderReplies(src._cachedReplies, src.loadedTotal);
+        _srReplies = src._cachedReplies;
+        renderSRRepliesList(_srReplies);
+        metaEl.textContent = `From: ${src.senderName} · ${_srReplies.length} repl${_srReplies.length !== 1 ? 'ies' : 'y'} · ${src.loadedTotal || _srReplies.length} total conversations`;
         return;
     }
 
-    try {
-        const res = await fetch('/api/intercom-series', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: 'replies', sourceId: src.sourceId }),
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || 'Failed to load replies');
-        renderReplies(data.replies || [], data.total);
-    } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="3" style="padding:14px;color:#fca5a5;">Error: ${escHtml(err.message)}</td></tr>`;
+    _srLoadCancelled = false;
+    _srReplies = [];
+    let cursor = null;
+    let total = null;
+    let convsScanned = 0;
+    let batchNum = 0;
+    const MAX_BATCHES = 30;  // safety: caps at ~1500 conversations per load
+
+    while (batchNum < MAX_BATCHES) {
+        if (_srLoadCancelled) break;
+        try {
+            const res = await fetch('/api/intercom-series', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: 'replies', sourceId: src.sourceId, cursor }),
+            });
+            const data = await res.json();
+            if (!res.ok || data.error) throw new Error(data.error || 'Failed to load replies');
+
+            _srReplies.push(...(data.replies || []));
+            _srReplies.sort((a, b) => (b.replyDate || 0) - (a.replyDate || 0));
+            if (data.total != null) total = data.total;
+            convsScanned += data.batchConversations || 0;
+            batchNum++;
+
+            renderSRRepliesList(_srReplies);
+            const totalLabel = total != null ? ` of ${total}` : '';
+            const more = data.nextCursor ? ` · loading…` : '';
+            metaEl.innerHTML = `From: ${escHtml(src.senderName)} · <strong>${_srReplies.length} repl${_srReplies.length !== 1 ? 'ies' : 'y'}</strong> · scanned ${convsScanned}${totalLabel} conversation${convsScanned !== 1 ? 's' : ''}${more}${data.nextCursor ? ` <button class="btn-sm" onclick="cancelSRLoad()" style="margin-left:10px;font-size:11px;">Stop</button>` : ''}`;
+
+            if (!data.nextCursor) break;
+            cursor = data.nextCursor;
+            // Tiny breather between batches to be polite to Intercom rate limit
+            await new Promise(r => setTimeout(r, 150));
+        } catch (err) {
+            tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="3" style="padding:14px;color:#fca5a5;">Error loading batch ${batchNum + 1}: ${escHtml(err.message)}. Showing ${_srReplies.length} replies fetched so far.</td></tr>`);
+            break;
+        }
     }
+
+    src._cachedReplies = _srReplies;
+    src.loadedReplies  = _srReplies.length;
+    src.loadedSampled  = _srReplies.length;
+    src.loadedTotal    = total ?? convsScanned;
+    _srSources[idx] = src;
+
+    if (!_srReplies.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted);">No customer replies found for this message.</td></tr>';
+    }
+    const finalTotal = total != null ? ` of ${total}` : '';
+    const note = _srLoadCancelled ? ' · stopped' : (batchNum >= MAX_BATCHES ? ' · hit safety cap' : ' · complete');
+    metaEl.textContent = `From: ${src.senderName} · ${_srReplies.length} repl${_srReplies.length !== 1 ? 'ies' : 'y'} · scanned ${convsScanned}${finalTotal} conversations${note}`;
 }
 
 function closeSRPanel() {
@@ -6082,9 +6120,21 @@ async function analyseSeriesReplies() {
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error || 'Analysis failed');
 
+        const rendered = renderSRMarkdown(data.analysis);
+        const meta = `Analysed ${data.repliesAnalysed} of ${data.repliesTotal} replies${data.trimmed ? ' (most recent)' : ''}`;
+        window._srLastAnalysisPlain = data.analysis;
         outEl.innerHTML = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px 16px;">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--brand);margin-bottom:8px;">Claude's Analysis</div>
-            <div style="font-size:13px;line-height:1.7;white-space:pre-wrap;">${escHtml(data.analysis)}</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap;">
+                <div>
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--brand);">Analysis</div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:3px;">${escHtml(meta)}</div>
+                </div>
+                <div style="display:flex;gap:6px;">
+                    <button class="btn-sm" onclick="copySRAnalysis('plain')" title="Copy as plain text">Copy</button>
+                    <button class="btn-sm" onclick="copySRAnalysis('email')" title="Copy formatted for email body">Copy for email</button>
+                </div>
+            </div>
+            <div class="sr-analysis-rendered" style="font-size:13px;line-height:1.7;">${rendered}</div>
         </div>`;
     } catch (err) {
         outEl.innerHTML = `<div class="alert alert-error">${escHtml(err.message)}</div>`;
@@ -6092,6 +6142,63 @@ async function analyseSeriesReplies() {
         btn.disabled = false;
         btn.textContent = 'Analyse Replies';
     }
+}
+
+// Lightweight markdown renderer — handles h2, bold, bullet lists, blockquotes (we don't
+// pull in a library to keep the single-file deploy simple).
+function renderSRMarkdown(md) {
+    if (!md) return '';
+    const lines = String(md).split('\n');
+    let html = '';
+    let inList = false;
+    const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
+    const inlineFmt = s => escHtml(s)
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="background:#1e293b;padding:1px 5px;border-radius:3px;font-size:12px;">$1</code>');
+    for (const raw of lines) {
+        const line = raw.replace(/\r$/, '');
+        if (!line.trim()) { closeList(); html += '<div style="height:8px;"></div>'; continue; }
+        if (line.startsWith('## ')) {
+            closeList();
+            html += `<h3 style="font-size:13px;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px;">${inlineFmt(line.slice(3))}</h3>`;
+        } else if (line.startsWith('# ')) {
+            closeList();
+            html += `<h3 style="font-size:14px;font-weight:700;margin:14px 0 8px;">${inlineFmt(line.slice(2))}</h3>`;
+        } else if (/^\s*[-*]\s+/.test(line)) {
+            if (!inList) { html += '<ul style="margin:4px 0 4px 18px;padding:0;">'; inList = true; }
+            html += `<li style="margin:3px 0;">${inlineFmt(line.replace(/^\s*[-*]\s+/, ''))}</li>`;
+        } else {
+            closeList();
+            html += `<p style="margin:6px 0;">${inlineFmt(line)}</p>`;
+        }
+    }
+    closeList();
+    return html;
+}
+
+function copySRAnalysis(mode) {
+    const md = window._srLastAnalysisPlain || '';
+    if (!md) return;
+    const subj = document.getElementById('sr-selected-subject').textContent || '';
+    const meta = document.getElementById('sr-selected-meta').textContent || '';
+    let payload;
+    if (mode === 'email') {
+        const cleaned = md
+            .replace(/^## (.+)$/gm, '$1\n')
+            .replace(/^# (.+)$/gm, '$1\n')
+            .replace(/\*\*([^*]+)\*\*/g, '$1');
+        payload = `Re: customer replies to "${subj}"\n\n${meta}\n\n${cleaned}`;
+    } else {
+        payload = md;
+    }
+    navigator.clipboard.writeText(payload).then(() => {
+        const toast = document.createElement('div');
+        toast.textContent = mode === 'email' ? 'Copied for email' : 'Copied';
+        toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#064e3b;color:#6ee7b7;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;z-index:300;box-shadow:0 4px 12px rgba(0,0,0,0.4);';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2000);
+    });
 }
 
 function escHtml(str) {

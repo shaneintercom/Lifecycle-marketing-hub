@@ -99,53 +99,52 @@ module.exports = async function (req, res) {
       return res.status(200).json({ sources, totalConversations: data.total_count });
     }
 
-    // ── REPLIES MODE ─────────────────────────────────────────────────────────
+    // ── REPLIES MODE (cursor-paginated, one batch per call) ──────────────────
+    // Frontend calls repeatedly with the returned nextCursor until it's null.
+    // Each call: 1 search page (50 conversations) + 50 parallel deep-fetches.
+    // For a campaign with N replies, frontend loops ceil(N/50) times.
     if (mode === 'replies') {
       if (!sourceId) return res.status(400).json({ error: 'sourceId is required.' });
+      const cursor = req.body.cursor || null;
 
-      // Fetch conversations for this source (up to 2 pages = 100)
-      const allConvs = [];
-      let cursor = null;
+      const pageBody = {
+        query: {
+          operator: 'AND',
+          value: [{ field: 'source.id', operator: '=', value: sourceId }],
+        },
+        pagination: { per_page: 50 },
+      };
+      if (cursor) pageBody.pagination.starting_after = cursor;
 
-      for (let page = 0; page < 2; page++) {
-        const pageBody = {
-          query: {
-            operator: 'AND',
-            value: [{ field: 'source.id', operator: '=', value: sourceId }],
-          },
-          pagination: { per_page: 50 },
-        };
-        if (cursor) pageBody.pagination.starting_after = cursor;
-
-        const r = await fetch('https://api.intercom.io/conversations/search', {
-          method: 'POST',
-          headers: icHeaders,
-          body: JSON.stringify(pageBody),
-        });
-        const data = await r.json();
-        const convs = data.conversations || [];
-        allConvs.push(...convs);
-        if (convs.length < 50 || !data.pages?.next?.starting_after) break;
-        cursor = data.pages.next.starting_after;
+      const searchResp = await fetch('https://api.intercom.io/conversations/search', {
+        method: 'POST',
+        headers: icHeaders,
+        body: JSON.stringify(pageBody),
+      });
+      if (!searchResp.ok) {
+        const err = await searchResp.text();
+        return res.status(500).json({ error: `Intercom search ${searchResp.status}: ${err.slice(0, 300)}` });
       }
+      const searchData = await searchResp.json();
+      const convs = searchData.conversations || [];
+      const nextCursor = searchData.pages?.next?.starting_after || null;
+      const total = searchData.total_count ?? null;
 
-      // Cap at 50 and fetch all in one parallel batch to stay within timeout
-      const toFetch = allConvs.slice(0, 50);
       const fullConvs = await Promise.all(
-        toFetch.map(c =>
+        convs.map(c =>
           fetch(`https://api.intercom.io/conversations/${c.id}`, {
             headers: {
               'Authorization': `Bearer ${TOKEN}`,
               'Accept': 'application/json',
               'Intercom-Version': '2.11',
             },
-          }).then(r => r.json())
+          }).then(r => r.ok ? r.json() : null).catch(() => null)
         )
       );
 
       const replies = [];
       for (const conv of fullConvs) {
-        if (!conv.id) continue;
+        if (!conv || !conv.id) continue;
         const parts = conv.conversation_parts?.conversation_parts || [];
         const userReply = parts.find(p =>
           (p.author?.type === 'user' || p.author?.type === 'lead') &&
@@ -168,7 +167,12 @@ module.exports = async function (req, res) {
       }
 
       replies.sort((a, b) => b.replyDate - a.replyDate);
-      return res.status(200).json({ replies, total: allConvs.length });
+      return res.status(200).json({
+        replies,
+        nextCursor,
+        total,
+        batchConversations: convs.length,
+      });
     }
 
     // ── RECENT SUBJECTS MODE ─────────────────────────────────────────────────
