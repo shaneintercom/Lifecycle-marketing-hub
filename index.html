@@ -6135,10 +6135,11 @@ function toggleSRConcerns() {
 async function classifySRBatch(batch, subject) {
     if (!batch.length) return;
     try {
-        const res = await fetch('/api/sr-classify', {
+        const res = await fetch('/api/claude-series-analysis', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                mode: 'classify',
                 replies: batch.map(r => ({ convId: r.convId, replyText: r.replyText })),
                 subject,
             }),
