@@ -4879,6 +4879,53 @@ async function generateReport() {
         });
     }
 
+    // Include orphan child groups: children inside the date range whose parent shipped
+    // outside the range (or has no parent record). Aggregate each group into a synthetic
+    // parent row so the report count matches the Dashboard Shipped count, which also
+    // groups orphans this way.
+    const { data: kidsInRange } = await db.from('lifecycle_campaigns')
+        .select('*')
+        .gte('send_date', from).lte('send_date', to)
+        .not('parent_campaign', 'is', null);
+    const parentNameSet = new Set(camps.map(c => c.campaign_name));
+    const orphanByParent = {};
+    (kidsInRange || []).forEach(k => {
+        if (!parentNameSet.has(k.parent_campaign)) {
+            if (!orphanByParent[k.parent_campaign]) orphanByParent[k.parent_campaign] = [];
+            orphanByParent[k.parent_campaign].push(k);
+        }
+    });
+    const orphanParentNames = Object.keys(orphanByParent);
+    if (orphanParentNames.length) {
+        const { data: orphanParentRows } = await db.from('lifecycle_campaigns')
+            .select('campaign_id, campaign_name, category, subject_line, notes')
+            .in('campaign_name', orphanParentNames)
+            .is('parent_campaign', null);
+        const orphanParentByName = {};
+        (orphanParentRows || []).forEach(p => { orphanParentByName[p.campaign_name] = p; });
+
+        orphanParentNames.forEach(parentName => {
+            const kids       = orphanByParent[parentName];
+            const agg        = aggRows(kids) || {};
+            const parentMeta = orphanParentByName[parentName] || {};
+            const earliest   = kids.reduce((min, k) => (!min || k.send_date < min) ? k.send_date : min, null);
+            const cats       = [...new Set(kids.map(k => k.category).filter(Boolean))];
+            camps.push({
+                campaign_id:   parentMeta.campaign_id || `orphan-${parentName}`,
+                campaign_name: parentName,
+                send_date:     earliest,
+                category:      parentMeta.category || cats[0] || null,
+                subject_line:  parentMeta.subject_line || null,
+                notes:         parentMeta.notes || null,
+                ...agg,
+                _aggregated:   true,
+                _childCount:   kids.length,
+                _orphan:       true,
+            });
+        });
+        camps.sort((a, b) => (a.send_date || '').localeCompare(b.send_date || ''));
+    }
+
     // Sum all rows with a CSV upload (parents with data + children) — avoids double-counting containers
     const totalSent = (allSends || []).reduce((a, c) => a + (c.emails_sent || 0) + (c.emails_sent_b || 0), 0);
     const periodAvgOpen  = avgMetric(camps,   'open_rate');
