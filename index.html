@@ -3146,6 +3146,13 @@ function parseIntercomCSV(csvText, campaignName) {
 }
 
 // ── CODA SYNC ────────────────────────────────────────────────────────────────
+// MUST match the Supabase unique index: lower(trim(campaign_name)), send_date.
+// If we use different normalisation here than the DB, inserts that "look new"
+// to the app get rejected by Postgres with a duplicate-key violation.
+function normCampaignKey(name, date) {
+    return `${(name || '').trim().toLowerCase()}|${date || ''}`;
+}
+
 function showSyncToast(msg) {
     let toast = document.getElementById('sync-toast');
     if (!toast) {
@@ -3207,7 +3214,7 @@ async function silentSyncFromCoda() {
     if (!withDate.length) return;
 
     const { data: existing } = await db.from('lifecycle_campaigns').select('campaign_name, send_date');
-    const existingKeys = new Set((existing || []).map(c => `${c.campaign_name}|${c.send_date}`));
+    const existingKeys = new Set((existing || []).map(c => normCampaignKey(c.campaign_name, c.send_date)));
 
     const allParsed = withDate.map(r => {
         const v        = r.values;
@@ -3225,12 +3232,12 @@ async function silentSyncFromCoda() {
     // Deduplicate within Coda results then filter to genuinely new
     const _seen = new Set();
     const allDeduped = allParsed.filter(r => {
-        const k = `${r.name}|${r.goLive}`;
+        const k = normCampaignKey(r.name, r.goLive);
         if (_seen.has(k)) return false;
         _seen.add(k);
         return true;
     });
-    const newOnes = allDeduped.filter(r => !existingKeys.has(`${r.name}|${r.goLive}`));
+    const newOnes = allDeduped.filter(r => !existingKeys.has(normCampaignKey(r.name, r.goLive)));
 
     // Insert new rows — but first check if same name exists with a different date
     // and no metrics (date was moved in Coda). Update that record instead of inserting.
@@ -3239,13 +3246,14 @@ async function silentSyncFromCoda() {
             .select('campaign_id, campaign_name, send_date, open_rate');
         const existingByName = {};
         for (const e of (allExisting || [])) {
-            if (!existingByName[e.campaign_name]) existingByName[e.campaign_name] = [];
-            existingByName[e.campaign_name].push(e);
+            const nk = (e.campaign_name || '').trim().toLowerCase();
+            if (!existingByName[nk]) existingByName[nk] = [];
+            existingByName[nk].push(e);
         }
 
         const toInsert = [], dateUpdateOps = [];
         for (const r of newOnes) {
-            const matches = existingByName[r.name] || [];
+            const matches = existingByName[(r.name || '').trim().toLowerCase()] || [];
             const staleRecords = matches.filter(e => e.send_date !== r.goLive && e.open_rate == null);
             if (staleRecords.length > 0) {
                 dateUpdateOps.push(db.from('lifecycle_campaigns').update({
@@ -3278,7 +3286,7 @@ async function silentSyncFromCoda() {
     }
 
     // Update metadata for already-existing records
-    const existingOnes = allDeduped.filter(r => existingKeys.has(`${r.name}|${r.goLive}`) && r.name && r.goLive);
+    const existingOnes = allDeduped.filter(r => existingKeys.has(normCampaignKey(r.name, r.goLive)) && r.name && r.goLive);
     await Promise.all(existingOnes.map(r =>
         db.from('lifecycle_campaigns').update({
             category:        r.category,
@@ -3289,13 +3297,13 @@ async function silentSyncFromCoda() {
     ));
 
     // Purge future campaigns (Mar 2026+) not in FY27 roadmap and with no metrics
-    const fy27KeysSilent = new Set(allDeduped.filter(r => r.goLive).map(r => `${r.name}|${r.goLive}`));
+    const fy27KeysSilent = new Set(allDeduped.filter(r => r.goLive).map(r => normCampaignKey(r.name, r.goLive)));
     const { data: silentOrphans } = await db.from('lifecycle_campaigns')
         .select('campaign_id, campaign_name, send_date')
         .gte('send_date', '2026-03-01')
         .is('open_rate', null)
         .is('emails_sent', null);
-    const silentToDelete = (silentOrphans || []).filter(c => !fy27KeysSilent.has(`${c.campaign_name}|${c.send_date}`));
+    const silentToDelete = (silentOrphans || []).filter(c => !fy27KeysSilent.has(normCampaignKey(c.campaign_name, c.send_date)));
     if (silentToDelete.length) {
         await Promise.all(silentToDelete.map(c => db.from('lifecycle_campaigns').delete().eq('campaign_id', c.campaign_id)));
     }
@@ -3374,7 +3382,7 @@ async function syncFromCoda() {
 
     // Fetch existing campaigns from Supabase to check for duplicates
     const { data: existing } = await db.from('lifecycle_campaigns').select('campaign_name, send_date');
-    const existingKeys = new Set((existing || []).map(c => `${c.campaign_name}|${c.send_date}`));
+    const existingKeys = new Set((existing || []).map(c => normCampaignKey(c.campaign_name, c.send_date)));
 
     const toImport = withDate.map(r => {
         const v = r.values;
@@ -3385,7 +3393,7 @@ async function syncFromCoda() {
         const priority = v['c-wP0h7clHiB'] || '';
         const owners   = Array.isArray(v['c-z1Wau-qigr']) ? v['c-z1Wau-qigr'].join(', ') : (v['c-z1Wau-qigr'] || '');
         const quarter  = v['c-IWAEuAT3lX'] || '';
-        const already  = existingKeys.has(`${name}|${goLive}`);
+        const already  = existingKeys.has(normCampaignKey(name, goLive));
         const parent   = (v['c-qIJvrFxXkv'] && v['c-qIJvrFxXkv'] !== '') ? v['c-qIJvrFxXkv'] : null;
         return { name, goLive, category, status, priority, owners, quarter, already, parent };
     }).filter(r => r.name);
@@ -3393,7 +3401,7 @@ async function syncFromCoda() {
     // Deduplicate within the Coda results themselves (same name+date appearing twice in Coda)
     const seenKeys = new Set();
     const deduped  = toImport.filter(r => {
-        const k = `${r.name}|${r.goLive}`;
+        const k = normCampaignKey(r.name, r.goLive);
         if (seenKeys.has(k)) return false;
         seenKeys.add(k);
         return true;
@@ -3421,12 +3429,13 @@ async function syncFromCoda() {
             .select('campaign_id, campaign_name, send_date, open_rate');
         const existingByName = {};
         for (const e of (allExisting || [])) {
-            if (!existingByName[e.campaign_name]) existingByName[e.campaign_name] = [];
-            existingByName[e.campaign_name].push(e);
+            const nk = (e.campaign_name || '').trim().toLowerCase();
+            if (!existingByName[nk]) existingByName[nk] = [];
+            existingByName[nk].push(e);
         }
         const dateOps = [];
         for (const r of newOnes) {
-            const matches = existingByName[r.name] || [];
+            const matches = existingByName[(r.name || '').trim().toLowerCase()] || [];
             const staleRecords = matches.filter(e => e.send_date !== r.goLive && e.open_rate == null);
             if (staleRecords.length > 0) {
                 dateOps.push(db.from('lifecycle_campaigns').update({
@@ -3448,13 +3457,13 @@ async function syncFromCoda() {
     }
 
     // Purge future campaigns (Mar 2026+) not in FY27 roadmap and with no metrics
-    const fy27Keys = new Set(deduped.filter(r => r.goLive).map(r => `${r.name}|${r.goLive}`));
+    const fy27Keys = new Set(deduped.filter(r => r.goLive).map(r => normCampaignKey(r.name, r.goLive)));
     const { data: futureOrphans } = await db.from('lifecycle_campaigns')
         .select('campaign_id, campaign_name, send_date')
         .gte('send_date', '2026-03-01')
         .is('open_rate', null)
         .is('emails_sent', null);
-    const toDelete = (futureOrphans || []).filter(c => !fy27Keys.has(`${c.campaign_name}|${c.send_date}`));
+    const toDelete = (futureOrphans || []).filter(c => !fy27Keys.has(normCampaignKey(c.campaign_name, c.send_date)));
     let purgedCount = 0;
     if (toDelete.length) {
         await Promise.all(toDelete.map(c => db.from('lifecycle_campaigns').delete().eq('campaign_id', c.campaign_id)));
@@ -3506,12 +3515,13 @@ async function confirmCodaSync() {
             .select('campaign_id, campaign_name, send_date, open_rate');
         const existingByName = {};
         for (const e of (allExisting || [])) {
-            if (!existingByName[e.campaign_name]) existingByName[e.campaign_name] = [];
-            existingByName[e.campaign_name].push(e);
+            const nk = (e.campaign_name || '').trim().toLowerCase();
+            if (!existingByName[nk]) existingByName[nk] = [];
+            existingByName[nk].push(e);
         }
 
         for (const r of queue) {
-            const matches = existingByName[r.name] || [];
+            const matches = existingByName[(r.name || '').trim().toLowerCase()] || [];
             // All no-metrics records with a different date = stale from a date change
             const staleRecords = matches.filter(e => e.send_date !== r.goLive && e.open_rate == null);
             if (staleRecords.length > 0) {
@@ -3545,8 +3555,31 @@ async function confirmCodaSync() {
             }));
             const { error } = await db.from('lifecycle_campaigns').insert(rows);
             if (error) {
-                panel.innerHTML = `<div class="sync-panel"><div class="alert alert-error">Import failed: ${error.message}</div></div>`;
-                return;
+                // Unique constraint hit means one of the rows already exists in Supabase
+                // under a different case/whitespace. Fall back to per-row insert so the
+                // good rows still go in, and skip the colliding ones.
+                if (/duplicate key|unique constraint|23505/i.test(error.message || '')) {
+                    let inserted = 0, skipped = 0;
+                    const skippedNames = [];
+                    for (const row of rows) {
+                        const { error: rowErr } = await db.from('lifecycle_campaigns').insert([row]);
+                        if (rowErr) {
+                            skipped++;
+                            skippedNames.push(row.campaign_name);
+                        } else {
+                            inserted++;
+                        }
+                    }
+                    toInsert = toInsert.slice(0, inserted);  // Keep accounting honest for the success message below
+                    if (skippedNames.length) {
+                        const sample = skippedNames.slice(0, 3).map(n => `"${n}"`).join(', ');
+                        const more = skippedNames.length > 3 ? ` and ${skippedNames.length - 3} more` : '';
+                        showSyncToast(`Skipped ${skipped} already-present campaign${skipped !== 1 ? 's' : ''}: ${sample}${more}`);
+                    }
+                } else {
+                    panel.innerHTML = `<div class="sync-panel"><div class="alert alert-error">Import failed: ${error.message}</div></div>`;
+                    return;
+                }
             }
         }
     }
