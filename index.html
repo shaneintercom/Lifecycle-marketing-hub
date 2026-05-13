@@ -371,6 +371,47 @@
         .dash-grid-2 { display:grid; grid-template-columns:3fr 2fr; gap:16px; }
         .dash-section-label { font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); margin-bottom:10px; margin-top:4px; font-family:'JetBrains Mono',monospace; }
         .dash-stat-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; }
+
+        /* Narrative ribbon at top of dashboard — one-sentence summary of the quarter */
+        .dash-narrative { background:linear-gradient(135deg,rgba(129,140,248,0.10) 0%,rgba(168,85,247,0.06) 100%); border:1px solid rgba(129,140,248,0.28); border-radius:12px; padding:18px 22px; margin-bottom:24px; position:relative; overflow:hidden; }
+        .dash-narrative::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:linear-gradient(180deg,var(--brand) 0%,#a855f7 100%); }
+        .dash-narrative-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:var(--brand); font-family:'JetBrains Mono',monospace; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+        .dash-narrative-label .live-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--brand); animation:pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        .dash-narrative-body { font-size:15px; line-height:1.6; color:var(--text); }
+        .dash-narrative-body strong { color:var(--text); font-weight:700; }
+        .dash-narrative-body .pos { color:#10b981; font-weight:700; }
+        .dash-narrative-body .neg { color:#fcd34d; font-weight:700; }
+
+        /* Section group headers — break the dashboard into named buckets */
+        .dash-group-header { display:flex; align-items:baseline; gap:12px; margin:32px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+        .dash-group-header:first-of-type { margin-top:8px; }
+        .dash-group-header h2 { font-size:17px; font-weight:700; letter-spacing:-0.01em; margin:0; color:var(--text); }
+        .dash-group-header .group-sub { font-size:12px; color:var(--muted); font-weight:400; }
+
+        /* Inline info tooltip — hover reveals a definition for jargon */
+        .info-tip { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; background:rgba(108,132,162,0.18); color:var(--muted); font-size:9px; font-weight:700; cursor:help; margin-left:6px; vertical-align:middle; position:relative; font-family:'JetBrains Mono',monospace; text-transform:none; letter-spacing:0; line-height:1; }
+        .info-tip:hover { background:rgba(129,140,248,0.25); color:var(--brand); }
+        .info-tip::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%); background:#0d1b2e; border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:11px; color:var(--text); font-weight:400; text-transform:none; letter-spacing:0; white-space:normal; width:260px; text-align:left; line-height:1.5; opacity:0; pointer-events:none; transition:opacity 0.15s; z-index:100; box-shadow:0 6px 20px rgba(0,0,0,0.5); font-family:'Plus Jakarta Sans',sans-serif; }
+        .info-tip:hover::after { opacity:1; }
+
+        /* Dashboard footer — sources, last refreshed, glossary link */
+        .dash-footer { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-top:32px; padding-top:14px; border-top:1px solid var(--border); font-size:11px; color:var(--muted); flex-wrap:wrap; }
+        .dash-footer .footer-meta { display:flex; gap:18px; flex-wrap:wrap; }
+        .dash-footer .footer-meta span strong { color:var(--text); font-weight:600; }
+        .dash-footer button.glossary-link { background:none; border:1px solid var(--border); color:var(--muted); padding:5px 11px; border-radius:6px; cursor:pointer; font-size:11px; font-family:inherit; transition:all 0.15s; }
+        .dash-footer button.glossary-link:hover { color:var(--text); border-color:var(--brand); }
+
+        /* Glossary modal */
+        .glossary-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:center; justify-content:center; z-index:1000; padding:24px; }
+        .glossary-modal-bg.open { display:flex; }
+        .glossary-modal { background:#0d1b2e; border:1px solid var(--border); border-radius:12px; max-width:560px; width:100%; max-height:80vh; overflow-y:auto; padding:24px 28px; }
+        .glossary-modal h3 { margin:0 0 4px; font-size:18px; }
+        .glossary-modal .glossary-sub { color:var(--muted); font-size:12px; margin-bottom:18px; }
+        .glossary-modal dl { margin:0; }
+        .glossary-modal dt { font-weight:700; font-size:13px; color:var(--brand); margin-top:14px; }
+        .glossary-modal dd { margin:4px 0 0; font-size:13px; line-height:1.55; color:var(--text); }
+        .glossary-modal .close-x { float:right; background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; padding:0; line-height:1; }
         .dash-stat-row { display:grid; gap:8px; margin-bottom:10px; }
         .dash-stat { text-align:center; }
         .dash-stat .sv { font-size:22px; font-weight:800; color:var(--text); line-height:1.1; }
@@ -520,9 +561,21 @@
     <!-- DASHBOARD -->
     <div id="tab-dashboard" class="tab-content active">
 
+        <!-- Narrative ribbon — one-glance headline summary of the quarter -->
+        <div id="dash-narrative" class="dash-narrative" style="display:none;">
+            <div class="dash-narrative-label"><span class="live-dot"></span><span id="dash-narrative-eyebrow">This quarter</span></div>
+            <div class="dash-narrative-body" id="dash-narrative-body"></div>
+        </div>
+
+        <!-- ── GROUP: HOW SENDS PERFORMED ─────────────────────────────────── -->
+        <div class="dash-group-header">
+            <h2>How sends performed</h2>
+            <span class="group-sub">Topline metrics and category benchmarks for the selected quarter</span>
+        </div>
+
         <!-- Quarter switcher for the KPI strip only -->
         <div id="dash-quarter-switcher" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);">Topline metrics</div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);">Topline metrics<span class="info-tip" data-tip="Aggregate send-quality metrics for the selected fiscal quarter. Quarters use Intercom's fiscal calendar: Q1=Feb-Apr, Q2=May-Jul, Q3=Aug-Oct, Q4=Nov-Jan.">i</span></div>
             <div id="dash-quarter-pills" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
             <div id="dash-quarter-banner" style="display:none;"></div>
         </div>
@@ -530,25 +583,25 @@
         <!-- KPI Strip -->
         <div class="dash-kpi-strip">
             <div class="dash-kpi">
-                <div class="kpi-label" id="kpi-sent-label">Emails Sent</div>
+                <div class="kpi-label" id="kpi-sent-label">Emails Sent<span class="info-tip" data-tip="Total emails sent in the selected quarter (parent campaigns plus all child sends). Includes both A and B variants for A/B tests.">i</span></div>
                 <div class="kpi-value" id="kpi-sent">—</div>
                 <div class="kpi-sub" id="kpi-sent-delta"></div>
                 <div id="kpi-sent-spark"></div>
             </div>
             <div class="dash-kpi">
-                <div class="kpi-label" id="kpi-open-label">Avg Open Rate</div>
+                <div class="kpi-label" id="kpi-open-label">Avg Open Rate<span class="info-tip" data-tip="Average open rate across all campaigns in the quarter, equally weighted (not weighted by send size). Compared against the average from the prior quarter.">i</span></div>
                 <div class="kpi-value" id="kpi-open">—</div>
                 <div class="kpi-sub" id="kpi-open-delta"></div>
                 <div id="kpi-open-spark"></div>
             </div>
             <div class="dash-kpi">
-                <div class="kpi-label" id="kpi-click-label">Avg Click Rate</div>
+                <div class="kpi-label" id="kpi-click-label">Avg Click Rate<span class="info-tip" data-tip="Average click-through rate across campaigns in the quarter (clicks ÷ delivered). Compared against the prior quarter.">i</span></div>
                 <div class="kpi-value" id="kpi-click">—</div>
                 <div class="kpi-sub" id="kpi-click-delta"></div>
                 <div id="kpi-click-spark"></div>
             </div>
             <div class="dash-kpi">
-                <div class="kpi-label" id="kpi-ctor-label">Avg CTOR</div>
+                <div class="kpi-label" id="kpi-ctor-label">Avg CTOR<span class="info-tip" data-tip="Click-to-Open Rate: clicks ÷ opens. Measures content quality among people who actually opened, independent of subject-line performance.">i</span></div>
                 <div class="kpi-value" id="kpi-ctor">—</div>
                 <div class="kpi-sub" id="kpi-ctor-delta"></div>
                 <div id="kpi-ctor-spark"></div>
@@ -556,36 +609,30 @@
         </div>
 
         <!-- Benchmarks by Category -->
-        <div class="dash-section-label">Benchmarks by Category</div>
+        <div class="dash-section-label">Benchmarks by Category<span class="info-tip" data-tip="This-quarter performance per campaign category, with an arrow showing direction vs the all-time category average.">i</span></div>
         <div id="bench-grid" class="grid-3" style="margin-bottom:20px;"></div>
 
-        <!-- Two-column: Top Performers + Side cards -->
-        <div class="dash-grid-2" style="margin-bottom:20px;">
-            <div>
-                <div class="dash-section-label">Top Performers · All time</div>
-                <div class="card-flush">
-                    <table>
-                        <thead><tr><th>Campaign</th><th>Category</th><th>Sent</th><th>Open %</th><th>Click %</th><th>CTOR %</th></tr></thead>
-                        <tbody id="dash-top-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
-                    </table>
-                </div>
+        <!-- Top Performers -->
+        <div style="margin-bottom:20px;">
+            <div class="dash-section-label">Top Performers · All time<span class="info-tip" data-tip="Highest open-rate campaigns across the full history, filtered to parent campaigns with at least 500 sends to avoid small-sample winners.">i</span></div>
+            <div class="card-flush">
+                <table>
+                    <thead><tr><th>Campaign</th><th>Category</th><th>Sent</th><th>Open %</th><th>Click %</th><th>CTOR %</th></tr></thead>
+                    <tbody id="dash-top-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+                </table>
             </div>
-            <div style="display:flex;flex-direction:column;gap:14px;">
-                <div>
-                    <div class="dash-section-label">A/B Tests</div>
-                    <div id="dash-ab-card" class="dash-stat-card"><div class="empty" style="padding:16px;">Loading…</div></div>
-                </div>
-                <div>
-                    <div class="dash-section-label">Experiment Pipeline</div>
-                    <div id="dash-backlog-card" class="dash-stat-card"><div class="empty" style="padding:16px;">Loading…</div></div>
-                </div>
-            </div>
+        </div>
+
+        <!-- ── GROUP: WHAT WE SHIPPED ─────────────────────────────────────── -->
+        <div class="dash-group-header">
+            <h2>What we shipped</h2>
+            <span class="group-sub">Campaign cadence and quarterly throughput</span>
         </div>
 
         <!-- Shipped -->
         <div style="margin-bottom:20px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                <div class="dash-section-label" style="margin:0;">Shipped</div>
+                <div class="dash-section-label" style="margin:0;">Shipped<span class="info-tip" data-tip="Campaigns marked Done in the calendar. Top-level campaigns count once; child sends are grouped under their parent. Range buttons let you pick a window.">i</span></div>
                 <div style="display:flex;gap:6px;align-items:center;">
                     <button class="shipped-range-btn" data-range="this-week">This week</button>
                     <button class="shipped-range-btn active" data-range="last-week">Last week</button>
@@ -602,18 +649,76 @@
         <!-- Quarterly throughput -->
         <div style="margin-bottom:20px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                <div class="dash-section-label" style="margin:0;">Quarterly throughput</div>
+                <div class="dash-section-label" style="margin:0;">Quarterly throughput<span class="info-tip" data-tip="Count of top-level campaigns shipped per quarter for the most recent 4 quarters. Child sends are folded into their parent; the in-progress quarter shows day count, not a delta.">i</span></div>
                 <div id="dash-throughput-meta" style="font-size:11px;color:var(--muted);"></div>
             </div>
             <div id="dash-throughput" class="dash-stat-card" style="padding:18px 18px 14px;"><div style="color:var(--muted);font-size:13px;">Loading…</div></div>
         </div>
 
-        <!-- Upcoming Product Launches -->
+        <!-- ── GROUP: EXPERIMENTATION ─────────────────────────────────────── -->
+        <div class="dash-group-header">
+            <h2>Experimentation</h2>
+            <span class="group-sub">Tests run and the backlog feeding next quarter</span>
+        </div>
+
+        <div class="dash-grid-2" style="margin-bottom:20px;">
+            <div>
+                <div class="dash-section-label">A/B Tests<span class="info-tip" data-tip="Tests run and conclusive winners. Stat-sig wins are flagged when the difference between variants exceeds the noise threshold.">i</span></div>
+                <div id="dash-ab-card" class="dash-stat-card"><div class="empty" style="padding:16px;">Loading…</div></div>
+            </div>
+            <div>
+                <div class="dash-section-label">Experiment Pipeline<span class="info-tip" data-tip="Tests in the backlog by status. Shows how much pipeline is feeding next quarter's testing program.">i</span></div>
+                <div id="dash-backlog-card" class="dash-stat-card"><div class="empty" style="padding:16px;">Loading…</div></div>
+            </div>
+        </div>
+
+        <!-- ── GROUP: WHAT'S NEXT ─────────────────────────────────────────── -->
+        <div class="dash-group-header">
+            <h2>What's next</h2>
+            <span class="group-sub">Product launches in the next 30 days that will trigger lifecycle work</span>
+        </div>
+
         <div style="margin-bottom:20px;">
-            <div class="dash-section-label">Upcoming Product Launches — Next 30 Days</div>
             <div id="dash-upcoming"><div style="color:var(--muted);font-size:13px;">Loading…</div></div>
         </div>
 
+        <!-- Footer: sources, last refreshed, glossary -->
+        <div class="dash-footer">
+            <div class="footer-meta">
+                <span>Sources: <strong>Coda</strong> (calendar), <strong>Iterable</strong> (sends), <strong>Snowflake</strong> (engagement)</span>
+                <span>Last refreshed: <strong id="dash-last-refreshed">—</strong></span>
+            </div>
+            <button class="glossary-link" onclick="openGlossary()">Glossary</button>
+        </div>
+
+    </div>
+
+    <!-- GLOSSARY MODAL -->
+    <div class="glossary-modal-bg" id="glossary-modal-bg" onclick="if(event.target.id==='glossary-modal-bg') closeGlossary()">
+        <div class="glossary-modal">
+            <button class="close-x" onclick="closeGlossary()">×</button>
+            <h3>Glossary</h3>
+            <div class="glossary-sub">Definitions used across this dashboard.</div>
+            <dl>
+                <dt>FY (Fiscal Year)</dt>
+                <dd>Intercom's fiscal year runs Feb to Jan. FY26 means the year starting Feb 2026 and ending Jan 2027. Quarters: Q1 = Feb-Apr, Q2 = May-Jul, Q3 = Aug-Oct, Q4 = Nov-Jan.</dd>
+
+                <dt>Parent campaign vs child send</dt>
+                <dd>A campaign in the calendar (parent) can have multiple email sends underneath it (children) — e.g. an announcement plus its follow-ups. Throughput counts parents only so cadence reflects campaigns, not raw sends.</dd>
+
+                <dt>Orphan child group</dt>
+                <dd>A child send that fell inside the date range but whose parent shipped outside it. We surface these as one synthetic campaign so the count matches the calendar.</dd>
+
+                <dt>Open / Click / CTOR</dt>
+                <dd><strong>Open rate</strong> = opens ÷ delivered. <strong>Click rate</strong> = clicks ÷ delivered. <strong>CTOR</strong> (Click-to-Open Rate) = clicks ÷ opens — content quality independent of subject line.</dd>
+
+                <dt>vs avg / vs prior</dt>
+                <dd>On KPI cards, deltas compare to the prior quarter. On benchmarks, they compare to the all-time average for that category.</dd>
+
+                <dt>Stat sig</dt>
+                <dd>A test has a statistically significant winner when the gap between variants is unlikely to be noise at p &lt; 0.05.</dd>
+            </dl>
+        </div>
     </div>
 
     <!-- LOG CAMPAIGN -->
@@ -1475,10 +1580,94 @@ async function loadDashboard() {
     renderShipped(hist);                  // broad dataset so all range buttons (Last quarter etc.) work
     renderQuarterlyThroughput(hist);
     renderUpcomingLaunches();
+    renderDashboardNarrative(hist, q1, all);
+    renderLastRefreshed();
 
     // KPI cards use the current quarter by default but can be pivoted via the switcher
     await loadDashKPIs(_dashKpiQuarterOffset);
 }
+
+// One-glance narrative ribbon: count of shipped campaigns this quarter so far,
+// last completed quarter's count + delta, and this-quarter avg open rate vs all-time.
+function renderDashboardNarrative(hist, qThisQ, allHist) {
+    const wrap = document.getElementById('dash-narrative');
+    const eyebrow = document.getElementById('dash-narrative-eyebrow');
+    const body    = document.getElementById('dash-narrative-body');
+    if (!wrap || !body) return;
+
+    const today      = new Date();
+    const currentQ   = quarterRangeFor(today, 0);
+    const lastQ      = quarterRangeFor(today, -1);
+    const prevQ      = quarterRangeFor(today, -2);
+
+    // Count campaigns shipped in a given date range using the Shipped section's rule:
+    // top-level parents + distinct orphan-parent groups.
+    const countCampaigns = (from, to) => {
+        const inRange = hist.filter(r => r.send_date && r.send_date >= from && r.send_date <= to && _isShipped(r));
+        if (!inRange.length) return 0;
+        const names    = new Set(inRange.map(c => c.campaign_name));
+        const parents  = inRange.filter(c => !c.parent_campaign).length;
+        const orphans  = new Set();
+        inRange.filter(c => c.parent_campaign).forEach(c => {
+            if (!names.has(c.parent_campaign)) orphans.add(c.parent_campaign);
+        });
+        return parents + orphans.size;
+    };
+
+    const thisQCount = countCampaigns(currentQ.from, currentQ.to);
+    const lastQCount = countCampaigns(lastQ.from,    lastQ.to);
+    const prevQCount = countCampaigns(prevQ.from,    prevQ.to);
+
+    // Day counter for the in-progress quarter
+    const dayMs = 1000 * 60 * 60 * 24;
+    const qStart    = new Date(currentQ.from);
+    const qEnd      = new Date(currentQ.to);
+    const daysIn    = Math.max(1, Math.floor((today - qStart) / dayMs) + 1);
+    const qTotal    = Math.round((qEnd - qStart) / dayMs) + 1;
+
+    // Last-quarter delta vs the one before
+    let lastQDelta = '';
+    if (lastQCount && prevQCount) {
+        const d = lastQCount - prevQCount;
+        const pct = Math.round((d / prevQCount) * 100);
+        const cls = d > 0 ? 'pos' : d < 0 ? 'neg' : '';
+        const sign = d > 0 ? '+' : '';
+        lastQDelta = ` <span class="${cls}">(${sign}${pct}% vs ${prevQ.label})</span>`;
+    }
+
+    // Open-rate signal: this-quarter avg vs all-time avg
+    const avgOf = (arr) => {
+        const vs = arr.filter(r => r.open_rate != null).map(r => r.open_rate);
+        return vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+    };
+    const thisQOpen = avgOf(qThisQ || []);
+    const allOpen   = avgOf(allHist || []);
+    let openSignal = '';
+    if (thisQOpen != null && allOpen != null) {
+        const ppDiff = (thisQOpen - allOpen) * 100;
+        const cls = ppDiff >= 0 ? 'pos' : 'neg';
+        const sign = ppDiff >= 0 ? '+' : '';
+        openSignal = ` Avg open rate this quarter is <strong>${(thisQOpen*100).toFixed(1)}%</strong> <span class="${cls}">(${sign}${ppDiff.toFixed(1)}pp vs all-time)</span>.`;
+    }
+
+    eyebrow.textContent = `${currentQ.label} in progress · day ${daysIn} of ${qTotal}`;
+    body.innerHTML =
+        `<strong>${thisQCount} campaign${thisQCount !== 1 ? 's' : ''}</strong> shipped so far this quarter. ` +
+        (lastQCount ? `Last completed quarter (${lastQ.label}) shipped <strong>${lastQCount}</strong>${lastQDelta}.` : '') +
+        openSignal;
+
+    wrap.style.display = 'block';
+}
+
+function renderLastRefreshed() {
+    const el = document.getElementById('dash-last-refreshed');
+    if (!el) return;
+    const now = new Date();
+    el.textContent = now.toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function openGlossary()  { document.getElementById('glossary-modal-bg').classList.add('open'); }
+function closeGlossary() { document.getElementById('glossary-modal-bg').classList.remove('open'); }
 
 // Refetch + rerender only the four topline KPI cards. Lightweight (two scoped queries).
 async function loadDashKPIs(offset) {
