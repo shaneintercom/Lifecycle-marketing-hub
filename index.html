@@ -2006,29 +2006,37 @@ function renderQuarterlyThroughput(rows) {
     const view = sorted.slice(-4);
     const max  = Math.max(...view.map(q => q.count), 1);
 
-    // Determine the "current" quarter so we can highlight it
+    // Determine the "current" quarter and how far we're into it (for the "in progress" row).
     const now = new Date();
-    const currentLabel = quarterRangeFor(now, 0).label;
+    const currentRange = quarterRangeFor(now, 0);
+    const currentLabel = currentRange.label;
+    const qStart = new Date(currentRange.from);
+    const qEnd   = new Date(currentRange.to);
+    const dayMs  = 1000 * 60 * 60 * 24;
+    const daysIn = Math.max(1, Math.floor((now - qStart) / dayMs) + 1);
+    const qTotalDays = Math.round((qEnd - qStart) / dayMs) + 1;
 
     const rowsHtml = view.map((q, idx) => {
+        const isCurrent = q.label === currentLabel;
         const prev = idx > 0 ? view[idx - 1] : null;
-        let delta = '';
-        if (prev) {
+        let delta;
+        if (isCurrent) {
+            delta = `<span style="color:var(--muted);">in progress · day ${daysIn} of ${qTotalDays}</span>`;
+        } else if (prev) {
             const d = q.count - prev.count;
             const pct = prev.count ? Math.round((d / prev.count) * 100) : null;
-            if (d > 0) delta = `<span style="color:#10b981;font-weight:600;">+${d}${pct !== null ? ` · +${pct}%` : ''}</span>`;
-            else if (d < 0) delta = `<span style="color:#fcd34d;font-weight:600;">${d}${pct !== null ? ` · ${pct}%` : ''}</span>`;
-            else delta = `<span style="color:var(--muted);">flat</span>`;
+            if (d > 0)      delta = `<span style="color:#10b981;font-weight:600;">▲ ${pct !== null ? `+${pct}%` : `+${d}`}</span> <span style="color:var(--muted);">vs ${prev.label}</span>`;
+            else if (d < 0) delta = `<span style="color:#fcd34d;font-weight:600;">▼ ${pct !== null ? `${pct}%` : `${d}`}</span> <span style="color:var(--muted);">vs ${prev.label}</span>`;
+            else            delta = `<span style="color:var(--muted);">flat vs ${prev.label}</span>`;
         } else {
-            delta = `<span style="color:var(--muted);">baseline</span>`;
+            delta = `<span style="color:var(--muted);">earliest in view</span>`;
         }
         const pct  = (q.count / max) * 100;
-        const isCurrent = q.label === currentLabel;
         const barColor = isCurrent ? 'var(--brand)' : '#3b4a63';
         const labelStyle = isCurrent ? 'color:var(--text);font-weight:700;' : 'color:var(--muted);font-weight:600;';
         const ongoing = isCurrent ? `<span style="font-size:10px;color:var(--brand);font-weight:600;margin-left:6px;text-transform:uppercase;letter-spacing:0.05em;">in progress</span>` : '';
         return `
-        <div style="display:grid;grid-template-columns:80px 1fr 64px 120px;gap:12px;align-items:center;padding:6px 0;">
+        <div style="display:grid;grid-template-columns:96px 1fr 56px 180px;gap:12px;align-items:center;padding:6px 0;">
             <div style="font-size:12px;${labelStyle}">${q.label}${ongoing}</div>
             <div style="height:18px;background:#0f1c30;border-radius:4px;position:relative;overflow:hidden;">
                 <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:${barColor};border-radius:4px;transition:width 0.4s;"></div>
@@ -2039,22 +2047,33 @@ function renderQuarterlyThroughput(rows) {
     }).join('');
 
     el.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
             <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Campaigns shipped per quarter</div>
-            <div style="font-size:11px;color:var(--muted);">last ${view.length} quarter${view.length !== 1 ? 's' : ''}</div>
+            <div style="font-size:11px;color:var(--muted);">last ${view.length} quarters · parent campaigns</div>
         </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Each bar counts top-level campaigns shipped in that quarter (children grouped under their parent).</div>
         ${rowsHtml}
     `;
 
-    // Meta line above the card: total YoY trajectory in one sentence
+    // Meta line above the card: spotlight the last COMPLETED quarter's delta — the in-progress
+    // quarter is excluded because comparing a partial quarter to a finished one is misleading.
     const meta = document.getElementById('dash-throughput-meta');
-    if (meta && view.length >= 2) {
-        const first = view[0], last = view[view.length - 1];
-        const d = last.count - first.count;
-        const pct = first.count ? Math.round((d / first.count) * 100) : null;
-        const dir = d > 0 ? '↑' : d < 0 ? '↓' : '→';
-        const arrowColor = d > 0 ? '#10b981' : d < 0 ? '#fcd34d' : 'var(--muted)';
-        meta.innerHTML = `<span style="color:${arrowColor};font-weight:700;">${dir} ${Math.abs(d)} campaign${Math.abs(d) !== 1 ? 's' : ''}${pct !== null ? ` (${pct >= 0 ? '+' : ''}${pct}%)` : ''}</span> · ${first.label} → ${last.label}`;
+    if (meta) {
+        const completed = view.filter(q => q.label !== currentLabel);
+        if (completed.length >= 2) {
+            const last = completed[completed.length - 1];
+            const prev = completed[completed.length - 2];
+            const d = last.count - prev.count;
+            const pct = prev.count ? Math.round((d / prev.count) * 100) : null;
+            const dir = d > 0 ? '▲' : d < 0 ? '▼' : '→';
+            const color = d > 0 ? '#10b981' : d < 0 ? '#fcd34d' : 'var(--muted)';
+            meta.innerHTML = `Last completed quarter: <span style="color:var(--text);font-weight:700;">${last.label} · ${last.count} campaigns</span> <span style="color:${color};font-weight:700;">${dir} ${pct !== null ? `${pct > 0 ? '+' : ''}${pct}%` : `${d}`}</span> <span style="color:var(--muted);">vs ${prev.label}</span>`;
+        } else if (completed.length === 1) {
+            const last = completed[0];
+            meta.innerHTML = `Last completed quarter: <span style="color:var(--text);font-weight:700;">${last.label} · ${last.count} campaigns</span>`;
+        } else {
+            meta.innerHTML = '';
+        }
     }
 }
 
