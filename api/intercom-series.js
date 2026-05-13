@@ -56,9 +56,10 @@ module.exports = async function (req, res) {
       if (since) andFilters.push({ field: 'created_at', operator: '>', value: since });
       if (until) andFilters.push({ field: 'created_at', operator: '<', value: until });
 
+      // Pull a wider sample (100 conversations) so the unique-subject grouping is more complete.
       const searchBody = {
         query: { operator: 'AND', value: andFilters },
-        pagination: { per_page: 50 },
+        pagination: { per_page: 100 },
       };
 
       const response = await fetch('https://api.intercom.io/conversations/search', {
@@ -75,15 +76,24 @@ module.exports = async function (req, res) {
       const data = await response.json();
       const convs = data.conversations || [];
 
-      const groups = {};
+      // Strip Re:/Fwd:/AW:/SV: prefixes recursively so reply chains collapse under their parent.
+      const normaliseSubject = (s) => {
+        let out = (s || '').trim();
+        const re = /^\s*(re|fwd?|aw|sv|tr|rv)\s*:\s*/i;
+        while (re.test(out)) out = out.replace(re, '');
+        return out.toLowerCase().replace(/\s+/g, ' ').trim();
+      };
+
+      // Step 1: group raw source IDs as before (one entry per Intercom source).
+      const rawSources = {};
       for (const c of convs) {
         const src = c.source || {};
         const sid = src.id;
         if (!sid) continue;
-        if (!groups[sid]) {
+        if (!rawSources[sid]) {
           const subject = stripHtml(src.subject || '');
           const bodySnippet = stripHtml(src.body || '').slice(0, 150);
-          groups[sid] = {
+          rawSources[sid] = {
             sourceId: sid,
             subject: subject || bodySnippet,
             bodySnippet,
@@ -92,10 +102,53 @@ module.exports = async function (req, res) {
             replyCount: 0,
           };
         }
-        groups[sid].replyCount++;
+        rawSources[sid].replyCount++;
       }
 
-      const sources = Object.values(groups).sort((a, b) => b.replyCount - a.replyCount);
+      // Step 2: merge raw sources by normalised subject. "Re: X" and "Re: Re: X" fold into "X".
+      // Entries with empty normalised subjects (e.g. inbound chats with no subject) stay separate by sourceId.
+      const merged = {};
+      for (const s of Object.values(rawSources)) {
+        const key = normaliseSubject(s.subject) || `__by_id_${s.sourceId}`;
+        if (!merged[key]) {
+          merged[key] = {
+            sourceIds: [],
+            // representative subject + sender start from this first entry; may be overridden by the dominant one
+            subject: s.subject,
+            bodySnippet: s.bodySnippet,
+            senderName: s.senderName,
+            senderEmail: s.senderEmail,
+            replyCount: 0,
+            dominantCount: 0,
+          };
+        }
+        const g = merged[key];
+        g.sourceIds.push(s.sourceId);
+        g.replyCount += s.replyCount;
+        // The original outbound usually has the highest replyCount; use it as the representative
+        if (s.replyCount > g.dominantCount) {
+          g.dominantCount  = s.replyCount;
+          g.subject        = s.subject;
+          g.bodySnippet    = s.bodySnippet;
+          g.senderName     = s.senderName;
+          g.senderEmail    = s.senderEmail;
+        }
+      }
+
+      const sources = Object.values(merged)
+        .map(g => ({
+          // Backwards-compatible: sourceId = first id. New: sourceIds is the full list.
+          sourceId:  g.sourceIds[0],
+          sourceIds: g.sourceIds,
+          subject:     g.subject,
+          bodySnippet: g.bodySnippet,
+          senderName:  g.senderName,
+          senderEmail: g.senderEmail,
+          replyCount:  g.replyCount,
+          mergedFrom:  g.sourceIds.length,
+        }))
+        .sort((a, b) => b.replyCount - a.replyCount);
+
       return res.status(200).json({ sources, totalConversations: data.total_count });
     }
 
@@ -104,14 +157,20 @@ module.exports = async function (req, res) {
     // Each call: 1 search page (50 conversations) + 50 parallel deep-fetches.
     // For a campaign with N replies, frontend loops ceil(N/50) times.
     if (mode === 'replies') {
-      if (!sourceId) return res.status(400).json({ error: 'sourceId is required.' });
+      // Accept either a single sourceId (legacy) or an array of sourceIds (merged group).
+      const sourceIds = Array.isArray(req.body.sourceIds) && req.body.sourceIds.length
+        ? req.body.sourceIds
+        : (sourceId ? [sourceId] : []);
+      if (!sourceIds.length) return res.status(400).json({ error: 'sourceId or sourceIds required.' });
       const cursor = req.body.cursor || null;
 
+      const sourceClauses = sourceIds.map(sid => ({ field: 'source.id', operator: '=', value: sid }));
+      const sourceQuery = sourceClauses.length === 1
+        ? sourceClauses[0]
+        : { operator: 'OR', value: sourceClauses };
+
       const pageBody = {
-        query: {
-          operator: 'AND',
-          value: [{ field: 'source.id', operator: '=', value: sourceId }],
-        },
+        query: { operator: 'AND', value: [sourceQuery] },
         pagination: { per_page: 50 },
       };
       if (cursor) pageBody.pagination.starting_after = cursor;

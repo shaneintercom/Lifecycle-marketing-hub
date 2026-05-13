@@ -1081,15 +1081,45 @@
                 <button class="btn" style="font-size:12px;" onclick="closeSRPanel()">← Back</button>
             </div>
 
+            <!-- Live sentiment dashboard (renders as replies stream in) -->
+            <div id="sr-dashboard" style="display:none;margin-bottom:16px;">
+                <div class="card" style="padding:16px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
+                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);">Live sentiment · auto-classified</div>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <span id="sr-classify-status" style="font-size:11px;color:var(--muted);"></span>
+                            <button class="btn-sm" id="sr-filter-clear" onclick="clearSRFilters()" style="display:none;font-size:11px;">Clear filters</button>
+                            <button class="btn-sm" id="sr-concerns-toggle" onclick="toggleSRConcerns()" style="font-size:11px;">🚩 Concerns only</button>
+                        </div>
+                    </div>
+                    <!-- Sentiment bar -->
+                    <div id="sr-sentbar" style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:#1e293b;margin-bottom:10px;">
+                        <div id="sr-sentbar-pos" style="background:#10b981;width:0;transition:width .3s;" title="Positive"></div>
+                        <div id="sr-sentbar-neu" style="background:#64748b;width:0;transition:width .3s;" title="Neutral"></div>
+                        <div id="sr-sentbar-neg" style="background:#ef4444;width:0;transition:width .3s;" title="Negative"></div>
+                    </div>
+                    <div style="display:flex;gap:14px;font-size:12px;color:var(--muted);margin-bottom:14px;flex-wrap:wrap;">
+                        <span><span style="display:inline-block;width:8px;height:8px;background:#10b981;border-radius:50%;margin-right:5px;"></span>Positive <strong id="sr-pct-pos" style="color:var(--text);">0%</strong></span>
+                        <span><span style="display:inline-block;width:8px;height:8px;background:#64748b;border-radius:50%;margin-right:5px;"></span>Neutral <strong id="sr-pct-neu" style="color:var(--text);">0%</strong></span>
+                        <span><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:50%;margin-right:5px;"></span>Negative <strong id="sr-pct-neg" style="color:var(--text);">0%</strong></span>
+                        <span id="sr-concern-badge" style="display:none;color:#fcd34d;font-weight:600;">🚩 <span id="sr-concern-count">0</span> to flag</span>
+                    </div>
+                    <!-- Theme chips -->
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:8px;">Top themes · click to filter</div>
+                    <div id="sr-themes" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+                </div>
+            </div>
+
             <!-- Replies list -->
             <div class="card-flush" style="margin-bottom:20px;">
                 <table>
                     <thead><tr>
+                        <th style="width:6px;padding:0;"></th>
                         <th>Customer</th>
                         <th>Reply</th>
                         <th>Date</th>
                     </tr></thead>
-                    <tbody id="sr-replies-body"><tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted);">Loading replies…</td></tr></tbody>
+                    <tbody id="sr-replies-body"><tr><td colspan="4" style="padding:20px;text-align:center;color:var(--muted);">Loading replies…</td></tr></tbody>
                 </table>
             </div>
 
@@ -5913,7 +5943,7 @@ async function prefetchAllReplyCounts() {
             const res = await fetch('/api/intercom-series', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: 'replies', sourceId: s.sourceId }),
+                body: JSON.stringify({ mode: 'replies', sourceIds: s.sourceIds || [s.sourceId] }),
             });
             const data = await res.json();
             if (!res.ok || data.error) continue;
@@ -5950,10 +5980,13 @@ function renderSRSources() {
         const countSub = loaded
             ? `<div style="font-size:10px;color:var(--muted);margin-top:1px;">from ${s.loadedSampled} of ${s.loadedTotal} convos</div>`
             : '';
+        const mergedBadge = (s.mergedFrom && s.mergedFrom > 1)
+            ? `<span title="Reply chains merged: Re:/Fwd: variants grouped under the original" style="display:inline-block;font-size:10px;font-weight:600;color:var(--brand);background:rgba(124,58,237,0.12);padding:2px 6px;border-radius:10px;margin-left:8px;vertical-align:middle;">+${s.mergedFrom - 1} reply chain${s.mergedFrom - 1 !== 1 ? 's' : ''}</span>`
+            : '';
         return `<div class="card" style="padding:14px;cursor:pointer;margin-bottom:8px;transition:border-color 0.15s;" onmouseenter="this.style.borderColor='var(--brand)'" onmouseleave="this.style.borderColor='var(--border)'" onclick="loadSRReplies(${i})">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
                 <div style="flex:1;min-width:0;">
-                    <div style="font-size:13px;font-weight:600;margin-bottom:3px;">${escHtml(subjDisplay)}</div>
+                    <div style="font-size:13px;font-weight:600;margin-bottom:3px;">${escHtml(subjDisplay)}${mergedBadge}</div>
                     ${snippet ? `<div style="font-size:12px;color:var(--muted);margin-bottom:3px;font-style:italic;">${escHtml(snippet)}</div>` : ''}
                     <div style="font-size:12px;color:var(--muted);">Sent by: ${escHtml(s.senderName || '—')}${s.senderEmail ? ` &lt;${escHtml(s.senderEmail)}&gt;` : ''}</div>
                 </div>
@@ -5969,29 +6002,155 @@ function renderSRSources() {
 }
 
 let _srLoadCancelled = false;
+let _srClassifications = {};     // convId -> { sentiment, theme, concern, summary }
+let _srThemeFilter   = null;     // string or null
+let _srSentimentFilter = null;   // 'positive' | 'neutral' | 'negative' | null
+let _srConcernsOnly  = false;
+
+const SR_SENTIMENT_COLOR = { positive: '#10b981', neutral: '#64748b', negative: '#ef4444' };
+
+function srMatchesFilter(r) {
+    const c = _srClassifications[r.convId];
+    if (_srConcernsOnly && (!c || (c.concern || 0) < 2)) return false;
+    if (_srThemeFilter && (!c || c.theme !== _srThemeFilter)) return false;
+    if (_srSentimentFilter && (!c || c.sentiment !== _srSentimentFilter)) return false;
+    return true;
+}
 
 function renderSRRepliesList(replies) {
     const tbody = document.getElementById('sr-replies-body');
+    const filtered = replies.filter(srMatchesFilter);
     if (!replies.length) {
-        tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted);">No customer replies found yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--muted);">No customer replies found yet.</td></tr>';
         return;
     }
-    tbody.innerHTML = replies.map(r => {
+    if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--muted);">No replies match the current filter.</td></tr>';
+        return;
+    }
+    // Sort: concerning replies first when no specific filter is active
+    const sorted = (_srConcernsOnly || _srThemeFilter || _srSentimentFilter)
+        ? filtered
+        : [...filtered].sort((a, b) => {
+            const ca = (_srClassifications[a.convId]?.concern) || 0;
+            const cb = (_srClassifications[b.convId]?.concern) || 0;
+            if (cb !== ca) return cb - ca;
+            return (b.replyDate || 0) - (a.replyDate || 0);
+          });
+    tbody.innerHTML = sorted.map(r => {
+        const c = _srClassifications[r.convId];
+        const stripeColor = c ? SR_SENTIMENT_COLOR[c.sentiment] : 'transparent';
         const date = r.replyDate ? new Date(r.replyDate * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
         const isTruncated = r.replyText.length > 280;
         const text = isTruncated ? r.replyText.slice(0, 280) + '…' : r.replyText;
         const hoverAttrs = isTruncated
             ? `onmouseenter="srShowTooltip(this,event)" onmouseleave="srHideTooltip()" data-full="${escHtml(r.replyText)}" style="font-size:13px;color:var(--text);cursor:help;"`
             : `style="font-size:13px;color:var(--text);"`;
+        const themeTag = c?.theme ? `<span class="sr-theme-tag" onclick="setSRThemeFilter('${escHtml(c.theme)}')" style="display:inline-block;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--brand);background:rgba(124,58,237,0.12);padding:2px 6px;border-radius:3px;margin-right:6px;cursor:pointer;">${escHtml(c.theme)}</span>` : '';
+        const concernFlag = c && c.concern >= 2 ? `<span title="${c.concern === 3 ? 'Urgent' : 'Escalate'}" style="margin-right:6px;">${c.concern === 3 ? '🚨' : '🚩'}</span>` : '';
+        const summary = c?.summary ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;font-style:italic;">${concernFlag}${themeTag}${escHtml(c.summary)}</div>` : (themeTag ? `<div style="margin-top:4px;">${themeTag}</div>` : '');
         return `<tr>
+            <td style="background:${stripeColor};padding:0;width:4px;"></td>
             <td style="white-space:nowrap;vertical-align:top;">
                 <div style="font-weight:600;font-size:13px;">${escHtml(r.contactName)}</div>
                 ${r.contactEmail ? `<div style="font-size:11px;color:var(--muted);">${escHtml(r.contactEmail)}</div>` : ''}
             </td>
-            <td ${hoverAttrs}>${escHtml(text)}</td>
-            <td style="white-space:nowrap;font-size:12px;color:var(--muted);">${date}</td>
+            <td>
+                <div ${hoverAttrs}>${escHtml(text)}</div>
+                ${summary}
+            </td>
+            <td style="white-space:nowrap;font-size:12px;color:var(--muted);vertical-align:top;">${date}</td>
         </tr>`;
     }).join('');
+}
+
+function renderSRDashboard(replies) {
+    const dash = document.getElementById('sr-dashboard');
+    const classified = replies.filter(r => _srClassifications[r.convId]);
+    if (!classified.length) { dash.style.display = 'none'; return; }
+    dash.style.display = 'block';
+
+    const counts = { positive: 0, neutral: 0, negative: 0 };
+    const themeCounts = {};
+    let concernHi = 0;
+    for (const r of classified) {
+        const c = _srClassifications[r.convId];
+        counts[c.sentiment] = (counts[c.sentiment] || 0) + 1;
+        themeCounts[c.theme] = (themeCounts[c.theme] || 0) + 1;
+        if (c.concern >= 2) concernHi++;
+    }
+    const total = classified.length;
+    const pct = n => total ? Math.round((n / total) * 100) : 0;
+    document.getElementById('sr-sentbar-pos').style.width = pct(counts.positive) + '%';
+    document.getElementById('sr-sentbar-neu').style.width = pct(counts.neutral)  + '%';
+    document.getElementById('sr-sentbar-neg').style.width = pct(counts.negative) + '%';
+    document.getElementById('sr-pct-pos').textContent = pct(counts.positive) + '%';
+    document.getElementById('sr-pct-neu').textContent = pct(counts.neutral)  + '%';
+    document.getElementById('sr-pct-neg').textContent = pct(counts.negative) + '%';
+
+    const concernEl = document.getElementById('sr-concern-badge');
+    if (concernHi > 0) {
+        concernEl.style.display = '';
+        document.getElementById('sr-concern-count').textContent = concernHi;
+    } else {
+        concernEl.style.display = 'none';
+    }
+
+    const themesEl = document.getElementById('sr-themes');
+    const themes = Object.entries(themeCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    themesEl.innerHTML = themes.map(([name, n]) => {
+        const active = _srThemeFilter === name;
+        return `<button class="sr-theme-chip" onclick="setSRThemeFilter('${escHtml(name)}')" style="background:${active ? 'var(--brand)' : 'rgba(124,58,237,0.12)'};color:${active ? '#fff' : 'var(--brand)'};border:1px solid ${active ? 'var(--brand)' : 'transparent'};font-size:12px;font-weight:600;padding:5px 10px;border-radius:14px;cursor:pointer;">${escHtml(name)} <span style="opacity:.8;font-weight:500;">${n}</span></button>`;
+    }).join('');
+
+    document.getElementById('sr-filter-clear').style.display = (_srThemeFilter || _srSentimentFilter || _srConcernsOnly) ? '' : 'none';
+}
+
+function setSRThemeFilter(theme) {
+    _srThemeFilter = _srThemeFilter === theme ? null : theme;
+    _srSentimentFilter = null;
+    renderSRDashboard(_srReplies);
+    renderSRRepliesList(_srReplies);
+}
+
+function clearSRFilters() {
+    _srThemeFilter = null;
+    _srSentimentFilter = null;
+    _srConcernsOnly = false;
+    document.getElementById('sr-concerns-toggle').style.background = '';
+    document.getElementById('sr-concerns-toggle').style.color = '';
+    renderSRDashboard(_srReplies);
+    renderSRRepliesList(_srReplies);
+}
+
+function toggleSRConcerns() {
+    _srConcernsOnly = !_srConcernsOnly;
+    const btn = document.getElementById('sr-concerns-toggle');
+    btn.style.background = _srConcernsOnly ? '#fcd34d' : '';
+    btn.style.color      = _srConcernsOnly ? '#000'    : '';
+    renderSRDashboard(_srReplies);
+    renderSRRepliesList(_srReplies);
+}
+
+async function classifySRBatch(batch, subject) {
+    if (!batch.length) return;
+    try {
+        const res = await fetch('/api/sr-classify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                replies: batch.map(r => ({ convId: r.convId, replyText: r.replyText })),
+                subject,
+            }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) return;  // classification is best-effort; silent fail keeps the UI working
+        for (const c of (data.classifications || [])) {
+            _srClassifications[c.convId] = c;
+        }
+        renderSRDashboard(_srReplies);
+        renderSRRepliesList(_srReplies);
+    } catch (e) { /* best-effort */ }
 }
 
 function cancelSRLoad() {
@@ -6018,8 +6177,18 @@ async function loadSRReplies(idx) {
 
     _srSourceCtx = src.subject ? `Subject: "${src.subject}" · Sender: ${src.senderName}` : `Sender: ${src.senderName} · Message: ${src.bodySnippet}`;
 
+    // Reset filter / classification state on every new source
+    _srThemeFilter = null;
+    _srSentimentFilter = null;
+    _srConcernsOnly = false;
+    document.getElementById('sr-concerns-toggle').style.background = '';
+    document.getElementById('sr-concerns-toggle').style.color = '';
+    document.getElementById('sr-dashboard').style.display = 'none';
+
     if (src._cachedReplies) {
         _srReplies = src._cachedReplies;
+        _srClassifications = src._cachedClassifications || {};
+        renderSRDashboard(_srReplies);
         renderSRRepliesList(_srReplies);
         metaEl.textContent = `From: ${src.senderName} · ${_srReplies.length} repl${_srReplies.length !== 1 ? 'ies' : 'y'} · ${src.loadedTotal || _srReplies.length} total conversations`;
         return;
@@ -6027,11 +6196,14 @@ async function loadSRReplies(idx) {
 
     _srLoadCancelled = false;
     _srReplies = [];
+    _srClassifications = {};
     let cursor = null;
     let total = null;
     let convsScanned = 0;
     let batchNum = 0;
     const MAX_BATCHES = 30;  // safety: caps at ~1500 conversations per load
+    const classifyJobs = [];
+    const classifyStatus = document.getElementById('sr-classify-status');
 
     while (batchNum < MAX_BATCHES) {
         if (_srLoadCancelled) break;
@@ -6039,16 +6211,29 @@ async function loadSRReplies(idx) {
             const res = await fetch('/api/intercom-series', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: 'replies', sourceId: src.sourceId, cursor }),
+                body: JSON.stringify({ mode: 'replies', sourceIds: src.sourceIds || [src.sourceId], cursor }),
             });
             const data = await res.json();
             if (!res.ok || data.error) throw new Error(data.error || 'Failed to load replies');
 
-            _srReplies.push(...(data.replies || []));
+            const newReplies = data.replies || [];
+            _srReplies.push(...newReplies);
             _srReplies.sort((a, b) => (b.replyDate || 0) - (a.replyDate || 0));
             if (data.total != null) total = data.total;
             convsScanned += data.batchConversations || 0;
             batchNum++;
+
+            // Kick off classification for this batch in the background — don't block
+            if (newReplies.length) {
+                classifyStatus.textContent = 'classifying…';
+                const job = classifySRBatch(newReplies, src.subject).finally(() => {
+                    const remaining = classifyJobs.filter(j => j._pending).length - 1;
+                    if (remaining <= 0) classifyStatus.textContent = '';
+                });
+                job._pending = true;
+                job.then(() => { job._pending = false; });
+                classifyJobs.push(job);
+            }
 
             renderSRRepliesList(_srReplies);
             const totalLabel = total != null ? ` of ${total}` : '';
