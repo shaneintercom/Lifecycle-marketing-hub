@@ -520,28 +520,37 @@
     <!-- DASHBOARD -->
     <div id="tab-dashboard" class="tab-content active">
 
+        <!-- Quarter context switcher -->
+        <div id="dash-quarter-switcher" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);">Quarter</div>
+                <div id="dash-quarter-pills" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            </div>
+            <div id="dash-quarter-banner" style="display:none;font-size:12px;color:var(--brand);"></div>
+        </div>
+
         <!-- KPI Strip -->
         <div class="dash-kpi-strip">
             <div class="dash-kpi">
-                <div class="kpi-label">Emails Sent Q1</div>
+                <div class="kpi-label" id="kpi-sent-label">Emails Sent</div>
                 <div class="kpi-value" id="kpi-sent">—</div>
                 <div class="kpi-sub" id="kpi-sent-delta"></div>
                 <div id="kpi-sent-spark"></div>
             </div>
             <div class="dash-kpi">
-                <div class="kpi-label">Avg Open Rate Q1</div>
+                <div class="kpi-label" id="kpi-open-label">Avg Open Rate</div>
                 <div class="kpi-value" id="kpi-open">—</div>
                 <div class="kpi-sub" id="kpi-open-delta"></div>
                 <div id="kpi-open-spark"></div>
             </div>
             <div class="dash-kpi">
-                <div class="kpi-label">Avg Click Rate Q1</div>
+                <div class="kpi-label" id="kpi-click-label">Avg Click Rate</div>
                 <div class="kpi-value" id="kpi-click">—</div>
                 <div class="kpi-sub" id="kpi-click-delta"></div>
                 <div id="kpi-click-spark"></div>
             </div>
             <div class="dash-kpi">
-                <div class="kpi-label">Avg CTOR Q1</div>
+                <div class="kpi-label" id="kpi-ctor-label">Avg CTOR</div>
                 <div class="kpi-value" id="kpi-ctor">—</div>
                 <div class="kpi-sub" id="kpi-ctor-delta"></div>
                 <div id="kpi-ctor-spark"></div>
@@ -555,7 +564,7 @@
         <!-- Two-column: Top Performers + Side cards -->
         <div class="dash-grid-2" style="margin-bottom:20px;">
             <div>
-                <div class="dash-section-label">Top Performers This Quarter</div>
+                <div class="dash-section-label" id="top-performers-label">Top Performers This Quarter</div>
                 <div class="card-flush">
                     <table>
                         <thead><tr><th>Campaign</th><th>Category</th><th>Sent</th><th>Open %</th><th>Click %</th><th>CTOR %</th></tr></thead>
@@ -1424,71 +1433,125 @@ function toFlt(id)  { const v = parseFloat(document.getElementById(id).value); r
 function val(id)    { return document.getElementById(id).value.trim() || null; }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
-async function loadDashboard() {
-    const [{ data: q1Data }, { data: q4Data }, { data: allData }, { data: abData }, { data: backlogData }, { data: trendData }, { data: throughputData }] = await Promise.all([
-        db.from('lifecycle_campaigns').select('*').order('send_date', { ascending: false }).gte('send_date', '2026-02-01'),
-        db.from('lifecycle_campaigns').select('emails_sent,emails_sent_b,open_rate,click_rate,click_to_open_rate,parent_campaign').gte('send_date', '2025-11-01').lt('send_date', '2026-02-01'),
+// Offset 0 = current quarter, -1 = last quarter, etc.
+let _dashQuarterOffset = 0;
+
+async function loadDashboard(offset) {
+    if (offset != null) _dashQuarterOffset = offset;
+
+    // Range for the selected quarter and the one immediately before (for deltas)
+    const today      = new Date();
+    const selectedQ  = quarterRangeFor(today, _dashQuarterOffset);
+    const priorQ     = quarterRangeFor(today, _dashQuarterOffset - 1);
+    // Postgres-friendly upper bound: send_date < day-after-end
+    const dayAfter = dateStr => {
+        const d = new Date(dateStr); d.setDate(d.getDate() + 1);
+        return d.toISOString().slice(0, 10);
+    };
+
+    renderQuarterSwitcher(selectedQ.label);
+
+    const [{ data: selData }, { data: prevData }, { data: allData }, { data: abData }, { data: backlogData }, { data: trendData }, { data: throughputData }] = await Promise.all([
+        db.from('lifecycle_campaigns').select('*').order('send_date', { ascending: false })
+          .gte('send_date', selectedQ.from).lt('send_date', dayAfter(selectedQ.to)),
+        db.from('lifecycle_campaigns').select('emails_sent,emails_sent_b,open_rate,click_rate,click_to_open_rate,parent_campaign')
+          .gte('send_date', priorQ.from).lt('send_date', dayAfter(priorQ.to)),
         db.from('lifecycle_campaigns').select('category,open_rate,click_rate,click_to_open_rate,emails_sent'),
         db.from('lifecycle_ab_tests').select('test_id,test_name,winner,winner_notes,test_date,element_tested,variant_a_name,variant_b_name,variant_a_open_rate,variant_b_open_rate,variant_a_click_rate,variant_b_click_rate,sent_a,sent_b').order('test_date', { ascending: false }),
         db.from('lifecycle_experiment_backlog').select('id,status'),
         db.from('lifecycle_campaigns').select('send_date,open_rate,click_rate,click_to_open_rate,emails_sent,emails_sent_b').gte('send_date', '2025-10-01').not('open_rate', 'is', null),
-        // Quarterly throughput: lightweight pull of all shippable rows since FY25 Q1 (Feb 2024)
         db.from('lifecycle_campaigns')
           .select('campaign_name,send_date,notes,created_by,parent_campaign,category')
           .not('send_date', 'is', null)
           .gte('send_date', '2024-02-01'),
     ]);
 
-    const q1  = q1Data  || [];
-    const q4  = q4Data  || [];
-    const all = allData || [];
+    const sel  = selData  || [];
+    const prev = prevData || [];
+    const all  = allData  || [];
 
-    renderDashKPIs(q1, q4);
+    // Update KPI labels to reflect selected quarter
+    document.getElementById('kpi-sent-label').textContent  = `Emails Sent · ${selectedQ.label}`;
+    document.getElementById('kpi-open-label').textContent  = `Avg Open Rate · ${selectedQ.label}`;
+    document.getElementById('kpi-click-label').textContent = `Avg Click Rate · ${selectedQ.label}`;
+    document.getElementById('kpi-ctor-label').textContent  = `Avg CTOR · ${selectedQ.label}`;
+    document.getElementById('top-performers-label').textContent = `Top Performers · ${selectedQ.label}`;
+
+    renderDashKPIs(sel, prev, priorQ.label);
     renderKPISparklines(trendData || []);
-    renderTopPerformers(q1);
+    renderTopPerformers(sel);
     renderABSummary(abData || []);
     renderBacklogSnapshot(backlogData || []);
-    renderBenchmarkGrid(q1, all);
-    renderShipped(q1);
+    renderBenchmarkGrid(sel, all);
+    renderShipped(sel);
     renderQuarterlyThroughput(throughputData || []);
     renderUpcomingLaunches();
 }
 
-function renderDashKPIs(q1, q4) {
+function renderQuarterSwitcher(selectedLabel) {
+    const pillsEl = document.getElementById('dash-quarter-pills');
+    if (!pillsEl) return;
+    const today = new Date();
+    const currentLabel = quarterRangeFor(today, 0).label;
+    // 6 quarters: current + 5 previous, displayed newest-first (left)
+    const offsets = [0, -1, -2, -3, -4, -5];
+    pillsEl.innerHTML = offsets.map(off => {
+        const q = quarterRangeFor(today, off);
+        const isSelected = q.label === selectedLabel;
+        const isCurrent  = q.label === currentLabel;
+        const bg = isSelected ? 'var(--brand)' : 'transparent';
+        const fg = isSelected ? '#fff' : 'var(--muted)';
+        const border = isSelected ? 'var(--brand)' : 'var(--border)';
+        const tag = isCurrent ? `<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-left:5px;color:${isSelected ? 'rgba(255,255,255,0.85)' : 'var(--brand)'};">live</span>` : '';
+        return `<button onclick="loadDashboard(${off})" style="font-size:12px;font-weight:600;padding:6px 12px;border-radius:18px;background:${bg};color:${fg};border:1px solid ${border};cursor:pointer;transition:all 0.15s;">${q.label}${tag}</button>`;
+    }).join('');
+
+    // Banner when looking at a historical quarter
+    const banner = document.getElementById('dash-quarter-banner');
+    if (selectedLabel !== currentLabel) {
+        banner.style.display = '';
+        banner.innerHTML = `Viewing historical data · <a href="#" onclick="event.preventDefault();loadDashboard(0)" style="color:var(--brand);text-decoration:underline;">Back to ${currentLabel}</a>`;
+    } else {
+        banner.style.display = 'none';
+    }
+}
+
+function renderDashKPIs(sel, prev, priorLabel = 'prior') {
     const avgF = (rows, field) => {
         const vals = rows.filter(r => r[field] != null).map(r => r[field]);
         return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
     };
     const sentTotal = rows => rows.reduce((s, r) => s + (r.emails_sent || 0) + (r.emails_sent_b || 0), 0);
 
-    const q1Sent  = sentTotal(q1);
-    const q4Sent  = sentTotal(q4);
-    const q1Open  = avgF(q1, 'open_rate');
-    const q1Click = avgF(q1, 'click_rate');
-    const q1CTOR  = avgF(q1, 'click_to_open_rate');
-    const q4Open  = avgF(q4, 'open_rate');
-    const q4Click = avgF(q4, 'click_rate');
-    const q4CTOR  = avgF(q4, 'click_to_open_rate');
+    const q1Sent  = sentTotal(sel);
+    const q4Sent  = sentTotal(prev);
+    const q1Open  = avgF(sel, 'open_rate');
+    const q1Click = avgF(sel, 'click_rate');
+    const q1CTOR  = avgF(sel, 'click_to_open_rate');
+    const q4Open  = avgF(prev, 'open_rate');
+    const q4Click = avgF(prev, 'click_rate');
+    const q4CTOR  = avgF(prev, 'click_to_open_rate');
 
-    const hasQ4 = q4.length > 0;
+    const hasQ4 = prev.length > 0;
+    const priorShort = priorLabel.split(' ')[0]; // "Q1" from "Q1 FY26"
 
     // pp delta for rates
     const rateDelta = (q1val, q4val) => {
         if (q1val == null) return '';
-        if (!hasQ4 || q4val == null) return `<span class="kpi-flat">no Q4 data yet</span>`;
+        if (!hasQ4 || q4val == null) return `<span class="kpi-flat">no ${priorShort} data yet</span>`;
         const d = (q1val - q4val) * 100;
         const sign = d > 0 ? '+' : '';
         const cls  = d > 0 ? 'kpi-up' : d < 0 ? 'kpi-down' : 'kpi-flat';
-        return `<span class="${cls}">${sign}${d.toFixed(1)}pp vs Q4</span>`;
+        return `<span class="${cls}">${sign}${d.toFixed(1)}pp vs ${priorShort}</span>`;
     };
 
     // % change for volume
     const sentDelta = (q1val, q4val) => {
-        if (!hasQ4 || !q4val) return `<span class="kpi-flat">no Q4 data yet</span>`;
+        if (!hasQ4 || !q4val) return `<span class="kpi-flat">no ${priorShort} data yet</span>`;
         const pct = ((q1val - q4val) / q4val) * 100;
         const sign = pct > 0 ? '+' : '';
         const cls  = pct > 0 ? 'kpi-up' : pct < 0 ? 'kpi-down' : 'kpi-flat';
-        return `<span class="${cls}">${sign}${pct.toFixed(0)}% vs Q4 (${q4val.toLocaleString()})</span>`;
+        return `<span class="${cls}">${sign}${pct.toFixed(0)}% vs ${priorShort} (${q4val.toLocaleString()})</span>`;
     };
 
     const fmt = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
