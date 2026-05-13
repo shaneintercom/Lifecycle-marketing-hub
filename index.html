@@ -562,7 +562,7 @@
         <!-- Two-column: Top Performers + Side cards -->
         <div class="dash-grid-2" style="margin-bottom:20px;">
             <div>
-                <div class="dash-section-label">Top Performers This Quarter</div>
+                <div class="dash-section-label">Top Performers · All time</div>
                 <div class="card-flush">
                     <table>
                         <thead><tr><th>Campaign</th><th>Category</th><th>Sent</th><th>Open %</th><th>Click %</th><th>CTOR %</th></tr></thead>
@@ -1445,29 +1445,35 @@ async function loadDashboard() {
     const today    = new Date();
     const currentQ = quarterRangeFor(today, 0);
 
-    const [{ data: q1Data }, { data: allData }, { data: abData }, { data: backlogData }, { data: trendData }, { data: throughputData }] = await Promise.all([
-        db.from('lifecycle_campaigns').select('*').order('send_date', { ascending: false })
+    const [{ data: q1Data }, { data: allData }, { data: abData }, { data: backlogData }, { data: trendData }, { data: historyData }] = await Promise.all([
+        // Current-quarter rows still used by renderBenchmarkGrid as the "this quarter" side of the comparison.
+        db.from('lifecycle_campaigns').select('category,open_rate,click_rate,click_to_open_rate,emails_sent')
           .gte('send_date', currentQ.from).lt('send_date', _dayAfter(currentQ.to)),
+        // All-time category-level data — baseline for benchmarks.
         db.from('lifecycle_campaigns').select('category,open_rate,click_rate,click_to_open_rate,emails_sent'),
         db.from('lifecycle_ab_tests').select('test_id,test_name,winner,winner_notes,test_date,element_tested,variant_a_name,variant_b_name,variant_a_open_rate,variant_b_open_rate,variant_a_click_rate,variant_b_click_rate,sent_a,sent_b').order('test_date', { ascending: false }),
         db.from('lifecycle_experiment_backlog').select('id,status'),
         db.from('lifecycle_campaigns').select('send_date,open_rate,click_rate,click_to_open_rate,emails_sent,emails_sent_b').gte('send_date', '2025-10-01').not('open_rate', 'is', null),
+        // Single broad historical pull — drives Top Performers (all-time), Shipped (filtered
+        // by its own range buttons), and Quarterly Throughput.
         db.from('lifecycle_campaigns')
-          .select('campaign_name,send_date,notes,created_by,parent_campaign,category')
+          .select('campaign_id,campaign_name,send_date,notes,created_by,parent_campaign,category,open_rate,click_rate,click_to_open_rate,emails_sent,emails_sent_b,unsubscribe_rate')
           .not('send_date', 'is', null)
-          .gte('send_date', '2024-02-01'),
+          .gte('send_date', '2024-02-01')
+          .order('send_date', { ascending: false }),
     ]);
 
-    const q1  = q1Data  || [];
-    const all = allData || [];
+    const q1   = q1Data    || [];
+    const all  = allData   || [];
+    const hist = historyData || [];
 
     renderKPISparklines(trendData || []);
-    renderTopPerformers(q1);
+    renderTopPerformers(hist);            // always all-time, never empty
     renderABSummary(abData || []);
     renderBacklogSnapshot(backlogData || []);
     renderBenchmarkGrid(q1, all);
-    renderShipped(q1);
-    renderQuarterlyThroughput(throughputData || []);
+    renderShipped(hist);                  // broad dataset so all range buttons (Last quarter etc.) work
+    renderQuarterlyThroughput(hist);
     renderUpcomingLaunches();
 
     // KPI cards use the current quarter by default but can be pivoted via the switcher
@@ -1694,12 +1700,22 @@ function renderKPISparklines(rows) {
     attachSparklisteners();
 }
 
-function renderTopPerformers(q1) {
-    const withData = q1.filter(c => c.open_rate != null && !c.parent_campaign)
+// All-time top performers across every logged campaign. Filtered to:
+//   - has open_rate (i.e. metrics have landed)
+//   - not a parent-campaign aggregate row
+//   - has at least a meaningful send volume (≥500) so a tiny one-off doesn't dominate
+function renderTopPerformers(history) {
+    const MIN_SENT = 500;
+    const candidates = (history || []).filter(c =>
+        c.open_rate != null &&
+        !c.parent_campaign &&
+        (c.emails_sent || 0) >= MIN_SENT
+    );
+    const withData = candidates
         .sort((a, b) => b.open_rate - a.open_rate)
         .slice(0, 5);
     if (!withData.length) {
-        document.getElementById('dash-top-body').innerHTML = `<tr><td colspan="6" class="empty">No campaigns with performance data yet this quarter</td></tr>`;
+        document.getElementById('dash-top-body').innerHTML = `<tr><td colspan="6" class="empty">No campaigns with performance data logged yet.</td></tr>`;
         return;
     }
     document.getElementById('dash-top-body').innerHTML = withData.map(c => `
