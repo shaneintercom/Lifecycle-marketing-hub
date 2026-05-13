@@ -591,8 +591,8 @@
                     <button class="shipped-range-btn active" data-range="last-week">Last week</button>
                     <button class="shipped-range-btn" data-range="this-month">This month</button>
                     <button class="shipped-range-btn" data-range="last-month">Last month</button>
-                    <button class="shipped-range-btn" data-range="last-quarter">Last quarter</button>
                     <button class="shipped-range-btn" data-range="this-quarter">This quarter</button>
+                    <span id="shipped-quarter-buttons" style="display:contents;"></span>
                     <button class="shipped-copy-btn" id="shipped-copy-btn" title="Copy list for Slack">Copy</button>
                 </div>
             </div>
@@ -1848,8 +1848,12 @@ function getShippedDateRange(range) {
         return { from: fmt(from), to: fmt(to), label: CAL_MONTHS[from.getMonth()] + ' ' + from.getFullYear() };
     }
     if (range === 'this-quarter' || range === 'last-quarter') {
-        // Intercom fiscal quarters: Q1 Feb–Apr, Q2 May–Jul, Q3 Aug–Oct, Q4 Nov–Jan
         const offset = range === 'last-quarter' ? -1 : 0;
+        return quarterRangeFor(today, offset);
+    }
+    // Named "quarter-offset:N" lets a button target a specific quarter by relative offset.
+    if (range && range.startsWith('quarter-offset:')) {
+        const offset = parseInt(range.split(':')[1], 10) || 0;
         return quarterRangeFor(today, offset);
     }
 }
@@ -1884,21 +1888,40 @@ function quarterRangeFor(refDate, offset = 0) {
 }
 
 // Map any date to its quarter info (matches the convention used by quarterRangeFor).
+// sortKey orders quarters chronologically by their actual start month — needed because
+// the FY label year jumps at Q4 (which spans Nov-Jan) so sorting by FY label is wrong.
 function quarterInfoForDate(dateStr) {
     const d = new Date(dateStr);
     const m = d.getMonth();
     const y = d.getFullYear();
-    let qNum, fyLabelYear;
-    if (m >= 1 && m <= 3)       { qNum = 1; fyLabelYear = y; }
-    else if (m >= 4 && m <= 6)  { qNum = 2; fyLabelYear = y; }
-    else if (m >= 7 && m <= 9)  { qNum = 3; fyLabelYear = y; }
-    else if (m >= 10)           { qNum = 4; fyLabelYear = y + 1; }
-    else                        { qNum = 4; fyLabelYear = y; }
-    return { qNum, fyLabelYear, label: `Q${qNum} FY${String(fyLabelYear).slice(-2)}` };
+    let qNum, fyLabelYear, qStartYear, qStartMonth;
+    if (m >= 1 && m <= 3)       { qNum = 1; fyLabelYear = y;     qStartYear = y;     qStartMonth = 1; }
+    else if (m >= 4 && m <= 6)  { qNum = 2; fyLabelYear = y;     qStartYear = y;     qStartMonth = 4; }
+    else if (m >= 7 && m <= 9)  { qNum = 3; fyLabelYear = y;     qStartYear = y;     qStartMonth = 7; }
+    else if (m >= 10)           { qNum = 4; fyLabelYear = y + 1; qStartYear = y;     qStartMonth = 10; }
+    else                        { qNum = 4; fyLabelYear = y;     qStartYear = y - 1; qStartMonth = 10; }
+    return {
+        qNum, fyLabelYear, qStartYear, qStartMonth,
+        label: `Q${qNum} FY${String(fyLabelYear).slice(-2)}`,
+        sortKey: qStartYear * 12 + qStartMonth,
+    };
 }
 
 function renderShipped(campaigns) {
     _shippedAll = campaigns;
+
+    // Inject dynamic named-quarter buttons for the previous 3 quarters so the
+    // director can jump straight to "what shipped in Q1 FY26" etc.
+    const extraEl = document.getElementById('shipped-quarter-buttons');
+    if (extraEl) {
+        const today = new Date();
+        const offsets = [-1, -2, -3];
+        extraEl.innerHTML = offsets.map(off => {
+            const q = quarterRangeFor(today, off);
+            return `<button class="shipped-range-btn" data-range="quarter-offset:${off}">${q.label}</button>`;
+        }).join('');
+    }
+
     _renderShippedList();
 
     document.querySelectorAll('.shipped-range-btn').forEach(btn => {
@@ -1942,17 +1965,33 @@ function renderQuarterlyThroughput(rows) {
         q.campaigns.push(r);
     }
 
-    // Sort chronologically using a synthetic key (FY end year × 10 + quarter num)
+    // Sort chronologically by actual quarter-start (NOT by FY label, which jumps at Q4)
     const sorted = Array.from(byQuarter.values())
-        .sort((a, b) => (a.fyLabelYear - b.fyLabelYear) || (a.qNum - b.qNum));
+        .sort((a, b) => a.sortKey - b.sortKey);
 
     if (!sorted.length) {
         el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:6px 0;">No shipped campaigns logged yet.</div>`;
         return;
     }
 
-    // Show last 6 quarters max — older are accessible via the full list scroll if needed
-    const view = sorted.slice(-6);
+    // Ensure the current quarter is shown even with zero shipped campaigns so the
+    // "in progress" bar always appears at the right edge.
+    const today = new Date();
+    const currentInfo = quarterInfoForDate(today.toISOString().slice(0, 10));
+    if (!byQuarter.has(currentInfo.label)) {
+        sorted.push({
+            label: currentInfo.label,
+            qNum: currentInfo.qNum,
+            fyLabelYear: currentInfo.fyLabelYear,
+            sortKey: currentInfo.sortKey,
+            count: 0,
+            campaigns: [],
+        });
+        sorted.sort((a, b) => a.sortKey - b.sortKey);
+    }
+
+    // Show last 4 quarters (current + 3 previous), oldest on the left, newest on the right
+    const view = sorted.slice(-4);
     const max  = Math.max(...view.map(q => q.count), 1);
 
     // Determine the "current" quarter so we can highlight it
