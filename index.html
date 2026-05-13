@@ -1511,7 +1511,7 @@ function renderKPIQuarterSwitcher(selectedLabel) {
     if (!pillsEl) return;
     const today = new Date();
     const currentLabel = quarterRangeFor(today, 0).label;
-    const offsets = [0, -1, -2, -3, -4, -5];
+    const offsets = [0, -1, -2, -3];
     pillsEl.innerHTML = offsets.map(off => {
         const q = quarterRangeFor(today, off);
         const isSelected = q.label === selectedLabel;
