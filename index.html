@@ -1952,23 +1952,32 @@ function renderQuarterlyThroughput(rows) {
     if (!el) return;
     const shipped = (rows || []).filter(r => r.send_date && _isShipped(r));
 
-    // Group by quarter label
-    const byQuarter = new Map();
+    // Bucket rows by quarter, then count each quarter the same way the Shipped list does:
+    // top-level parents + distinct orphan-parent groups (children whose parent isn't in
+    // the same bucket). This keeps the throughput count aligned with the list below.
+    const rowsByQuarter = new Map();
     for (const r of shipped) {
         const info = quarterInfoForDate(r.send_date);
-        if (!byQuarter.has(info.label)) {
-            byQuarter.set(info.label, {
-                label: info.label,
-                qNum: info.qNum,
-                fyLabelYear: info.fyLabelYear,
-                sortKey: info.sortKey,
-                count: 0,
-                campaigns: [],
-            });
-        }
-        const q = byQuarter.get(info.label);
-        q.count++;
-        q.campaigns.push(r);
+        if (!rowsByQuarter.has(info.label)) rowsByQuarter.set(info.label, { info, rows: [] });
+        rowsByQuarter.get(info.label).rows.push(r);
+    }
+
+    const byQuarter = new Map();
+    for (const [label, { info, rows: qrows }] of rowsByQuarter) {
+        const names = new Set(qrows.map(c => c.campaign_name));
+        const parents = qrows.filter(c => !c.parent_campaign);
+        const orphans = new Set();
+        qrows.filter(c => c.parent_campaign).forEach(c => {
+            if (!names.has(c.parent_campaign)) orphans.add(c.parent_campaign);
+        });
+        byQuarter.set(label, {
+            label,
+            qNum: info.qNum,
+            fyLabelYear: info.fyLabelYear,
+            sortKey: info.sortKey,
+            count: parents.length + orphans.size,
+            campaigns: qrows,
+        });
     }
 
     // Always inject the current quarter plus the previous 3 as zero-count placeholders so
