@@ -352,12 +352,15 @@ module.exports = async function (req, res) {
       const hours = Number(req.body.hours) || 168;
       const sinceTs = Math.floor(Date.now() / 1000) - hours * 3600;
 
+      // source.delivered_as='automated' = series-sent campaigns (the kind CLM ships).
+      // This filters out billing emails, admin notifications, support replies, etc.
       const searchBody = {
         query: {
           operator: 'AND',
           value: [
             { field: 'created_at', operator: '>', value: sinceTs },
             { field: 'source.type', operator: '=', value: 'email' },
+            { field: 'source.delivered_as', operator: '=', value: 'automated' },
           ],
         },
         pagination: { per_page: 100 },

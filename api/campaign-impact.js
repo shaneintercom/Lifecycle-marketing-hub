@@ -945,10 +945,11 @@ function generateJWT() {
   const pk = (process.env.SNOWFLAKE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
   if (!pk) throw new Error('SNOWFLAKE_PRIVATE_KEY not configured');
 
-  // Snowflake JWT iss/sub uses the account *name* without the org prefix when the
-  // identifier is in <org>-<account> format. The hyphenated form is for URLs only.
-  const fullAccount = (process.env.SNOWFLAKE_ACCOUNT || 'PEOSZPH-INTERCOM_US').toUpperCase();
-  const account = fullAccount.includes('-') ? fullAccount.split('-').slice(1).join('-') : fullAccount;
+  // Snowflake JWT accepts either the org-account form or just the account name.
+  // We keep the full form here because it matches the URL identifier and Snowflake
+  // documents it as supported. Stripping the org prefix did not change the error,
+  // confirming the issue is key mismatch, not account format.
+  const account = (process.env.SNOWFLAKE_ACCOUNT || 'PEOSZPH-INTERCOM_US').toUpperCase();
   const user = (process.env.SNOWFLAKE_USER || 'SHANE_RYAN').toUpperCase();
 
   const privateKey = crypto.createPrivateKey(pk);
@@ -1056,23 +1057,29 @@ module.exports = async function (req, res) {
     const pk = (process.env.SNOWFLAKE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
     if (!pk) return res.status(503).json({ error: 'SNOWFLAKE_PRIVATE_KEY not set' });
     try {
-      const fullAccount = (process.env.SNOWFLAKE_ACCOUNT || 'PEOSZPH-INTERCOM_US').toUpperCase();
-      const account     = fullAccount.includes('-') ? fullAccount.split('-').slice(1).join('-') : fullAccount;
-      const user        = (process.env.SNOWFLAKE_USER || 'SHANE_RYAN').toUpperCase();
+      const account = (process.env.SNOWFLAKE_ACCOUNT || 'PEOSZPH-INTERCOM_US').toUpperCase();
+      const user    = (process.env.SNOWFLAKE_USER || 'SHANE_RYAN').toUpperCase();
       const privateKey = crypto.createPrivateKey(pk);
       const publicKey  = crypto.createPublicKey(privateKey);
       const pubDer = publicKey.export({ type: 'spki', format: 'der' });
       const fp = crypto.createHash('sha256').update(pubDer).digest('base64');
+      const pubPem = publicKey.export({ type: 'spki', format: 'pem' });
       return res.status(200).json({
         ok: true,
-        fullAccount,
-        accountInClaim: account,
+        account,
         user,
         iss: `${account}.${user}.SHA256:${fp}`,
         sub: `${account}.${user}`,
         fingerprint: `SHA256:${fp}`,
         privateKeyChars: pk.length,
-        hint: 'In Snowsight run: DESC USER ' + user + '; — compare the RSA_PUBLIC_KEY_FP column to the fingerprint above. If they differ, the public key registered in Snowflake does not match the private key in SNOWFLAKE_PRIVATE_KEY.',
+        publicKeyPem: pubPem,
+        verification_steps: [
+          '1. In Snowsight, open a SQL worksheet and run: DESC USER ' + user + ';',
+          '2. Find the row labeled RSA_PUBLIC_KEY_FP. Its value should be: SHA256:' + fp,
+          '3. If they differ, run this to update Snowflake to match Vercel:',
+          '   ALTER USER ' + user + ' SET RSA_PUBLIC_KEY=\'<paste publicKeyPem from this response, without the BEGIN/END lines>\';',
+          '4. After ALTER USER succeeds, retry the Pulse Live Send Performance refresh.',
+        ],
       });
     } catch (err) {
       return res.status(500).json({ ok: false, error: err.message, hint: 'Could not parse SNOWFLAKE_PRIVATE_KEY — it may be malformed or truncated in the Vercel env var.' });

@@ -1955,7 +1955,28 @@ async function refreshPulsePerf() {
             body: JSON.stringify({ mode: 'liveSendPerf', hours: 72 }),
         });
         const d = await r.json();
-        if (!r.ok) throw new Error(d.error || `Snowflake error ${r.status}`);
+        if (!r.ok) {
+            const msg = d.error || `Snowflake error ${r.status}`;
+            if (msg.includes('JWT token is invalid')) {
+                const dbg = await fetch('/api/campaign-impact', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'jwtDebug' }),
+                }).then(r => r.json()).catch(() => null);
+                const fp = dbg?.fingerprint || 'SHA256:<unavailable>';
+                el.innerHTML = `<div style="padding:18px;font-size:13px;color:var(--text);line-height:1.6;">
+                    <div style="color:#fcd34d;font-weight:700;margin-bottom:8px;">Snowflake rejected the JWT</div>
+                    <div style="color:var(--muted);margin-bottom:12px;">The public key on user <strong>SHANE_RYAN</strong> in Snowflake doesn't match the private key in Vercel's <code>SNOWFLAKE_PRIVATE_KEY</code> env var. The two need to be synced.</div>
+                    <div style="background:#0f1c30;border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.6;color:var(--text);margin-bottom:10px;">
+                        <div style="color:var(--muted);">Vercel's private-key fingerprint:</div>
+                        <div style="color:var(--brand);word-break:break-all;">${fp}</div>
+                    </div>
+                    <div style="font-size:12px;color:var(--muted);">In Snowsight, run <code style="color:var(--text);">DESC USER SHANE_RYAN;</code> and compare the <code style="color:var(--text);">RSA_PUBLIC_KEY_FP</code>. If they differ, hit <code style="color:var(--text);">/api/campaign-impact</code> with <code style="color:var(--text);">{"mode":"jwtDebug"}</code> for the full PEM to paste into <code style="color:var(--text);">ALTER USER ... SET RSA_PUBLIC_KEY</code>.</div>
+                </div>`;
+                return;
+            }
+            throw new Error(msg);
+        }
         const campaigns = d.campaigns || [];
         if (!campaigns.length) {
             el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">No campaigns sent in the last ${d.windowHours} hours.</div>`;
