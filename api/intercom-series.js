@@ -345,26 +345,36 @@ module.exports = async function (req, res) {
     }
 
     // ── FIREHOSE MODE ────────────────────────────────────────────────────────
-    // Pulse panel: pull the last N conversations and extract the first user reply
-    // from each so the dashboard can show "what customers are saying right now"
-    // without the caller having to specify a series.
+    // Pulse panel: search Intercom for conversations whose source.type is "email"
+    // (i.e. outbound campaign sends) in the last N hours, then extract each
+    // conversation's first end-user reply.
     if (mode === 'firehose') {
-      const hours = Number(req.body.hours) || 48;
+      const hours = Number(req.body.hours) || 168;
       const sinceTs = Math.floor(Date.now() / 1000) - hours * 3600;
 
-      // Indexed list endpoint; cheaper than search when we have no filter beyond recency.
-      const listResp = await fetch('https://api.intercom.io/conversations?per_page=60&sort=created_at&order=desc', {
-        headers: icHeaders,
-      });
-      if (!listResp.ok) {
-        const err = await listResp.text();
-        return res.status(500).json({ error: `Intercom ${listResp.status}: ${err.slice(0, 300)}` });
-      }
-      const listData = await listResp.json();
-      const convs = (listData.conversations || []).filter(c => (c.created_at || 0) >= sinceTs);
+      const searchBody = {
+        query: {
+          operator: 'AND',
+          value: [
+            { field: 'created_at', operator: '>', value: sinceTs },
+            { field: 'source.type', operator: '=', value: 'email' },
+          ],
+        },
+        pagination: { per_page: 100 },
+      };
 
-      // Fetch each conversation in full so we can read conversation_parts and pick the
-      // earliest end-user reply (skip teammate-only conversations and empty replies).
+      const searchResp = await fetch('https://api.intercom.io/conversations/search', {
+        method: 'POST',
+        headers: icHeaders,
+        body: JSON.stringify(searchBody),
+      });
+      if (!searchResp.ok) {
+        const err = await searchResp.text();
+        return res.status(500).json({ error: `Intercom search ${searchResp.status}: ${err.slice(0, 300)}` });
+      }
+      const searchData = await searchResp.json();
+      const convs = (searchData.conversations || []).slice(0, 60);
+
       const fullConvs = await Promise.all(
         convs.map(c =>
           fetch(`https://api.intercom.io/conversations/${c.id}`, { headers: icHeaders })
@@ -389,7 +399,7 @@ module.exports = async function (req, res) {
           contactEmail:  author.email || '',
           replyText:     stripHtml(userReply.body || ''),
           replyDate:     userReply.created_at,
-          sourceSubject: stripHtml(conv.source?.subject || '') || '(no subject)',
+          sourceSubject: stripHtml(conv.source?.subject || ''),
         });
       }
 
@@ -398,6 +408,7 @@ module.exports = async function (req, res) {
         replies,
         windowHours: hours,
         fetchedConversations: convs.length,
+        totalMatching: searchData.total_count,
       });
     }
 

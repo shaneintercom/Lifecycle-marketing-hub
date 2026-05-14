@@ -945,7 +945,10 @@ function generateJWT() {
   const pk = (process.env.SNOWFLAKE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
   if (!pk) throw new Error('SNOWFLAKE_PRIVATE_KEY not configured');
 
-  const account = (process.env.SNOWFLAKE_ACCOUNT || 'PEOSZPH-INTERCOM_US').toUpperCase();
+  // Snowflake JWT iss/sub uses the account *name* without the org prefix when the
+  // identifier is in <org>-<account> format. The hyphenated form is for URLs only.
+  const fullAccount = (process.env.SNOWFLAKE_ACCOUNT || 'PEOSZPH-INTERCOM_US').toUpperCase();
+  const account = fullAccount.includes('-') ? fullAccount.split('-').slice(1).join('-') : fullAccount;
   const user = (process.env.SNOWFLAKE_USER || 'SHANE_RYAN').toUpperCase();
 
   const privateKey = crypto.createPrivateKey(pk);
@@ -1053,15 +1056,17 @@ module.exports = async function (req, res) {
     const pk = (process.env.SNOWFLAKE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
     if (!pk) return res.status(503).json({ error: 'SNOWFLAKE_PRIVATE_KEY not set' });
     try {
-      const account = (process.env.SNOWFLAKE_ACCOUNT || 'PEOSZPH-INTERCOM_US').toUpperCase();
-      const user    = (process.env.SNOWFLAKE_USER    || 'SHANE_RYAN').toUpperCase();
+      const fullAccount = (process.env.SNOWFLAKE_ACCOUNT || 'PEOSZPH-INTERCOM_US').toUpperCase();
+      const account     = fullAccount.includes('-') ? fullAccount.split('-').slice(1).join('-') : fullAccount;
+      const user        = (process.env.SNOWFLAKE_USER || 'SHANE_RYAN').toUpperCase();
       const privateKey = crypto.createPrivateKey(pk);
       const publicKey  = crypto.createPublicKey(privateKey);
       const pubDer = publicKey.export({ type: 'spki', format: 'der' });
       const fp = crypto.createHash('sha256').update(pubDer).digest('base64');
       return res.status(200).json({
         ok: true,
-        account,
+        fullAccount,
+        accountInClaim: account,
         user,
         iss: `${account}.${user}.SHA256:${fp}`,
         sub: `${account}.${user}`,
