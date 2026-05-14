@@ -270,7 +270,64 @@ module.exports = async function (req, res) {
       return res.status(200).json({ subjects: sorted, debug: { fetched: convs.length } });
     }
 
-    return res.status(400).json({ error: 'Invalid mode. Use "search", "replies", or "recentSubjects".' });
+    // ── FIREHOSE MODE ────────────────────────────────────────────────────────
+    // Pulse panel: pull the last N conversations and extract the first user reply
+    // from each so the dashboard can show "what customers are saying right now"
+    // without the caller having to specify a series.
+    if (mode === 'firehose') {
+      const hours = Number(req.body.hours) || 48;
+      const sinceTs = Math.floor(Date.now() / 1000) - hours * 3600;
+
+      // Indexed list endpoint; cheaper than search when we have no filter beyond recency.
+      const listResp = await fetch('https://api.intercom.io/conversations?per_page=60&sort=created_at&order=desc', {
+        headers: icHeaders,
+      });
+      if (!listResp.ok) {
+        const err = await listResp.text();
+        return res.status(500).json({ error: `Intercom ${listResp.status}: ${err.slice(0, 300)}` });
+      }
+      const listData = await listResp.json();
+      const convs = (listData.conversations || []).filter(c => (c.created_at || 0) >= sinceTs);
+
+      // Fetch each conversation in full so we can read conversation_parts and pick the
+      // earliest end-user reply (skip teammate-only conversations and empty replies).
+      const fullConvs = await Promise.all(
+        convs.map(c =>
+          fetch(`https://api.intercom.io/conversations/${c.id}`, { headers: icHeaders })
+            .then(r => r.ok ? r.json() : null)
+            .catch(() => null)
+        )
+      );
+
+      const replies = [];
+      for (const conv of fullConvs) {
+        if (!conv || !conv.id) continue;
+        const parts = conv.conversation_parts?.conversation_parts || [];
+        const userReply = parts.find(p =>
+          (p.author?.type === 'user' || p.author?.type === 'lead') &&
+          p.body && p.body.trim() !== '' && p.body !== '<p></p>' && p.body !== '<p> </p>'
+        );
+        if (!userReply) continue;
+        const author = userReply.author || {};
+        replies.push({
+          convId: conv.id,
+          contactName:   author.name || author.email || 'Unknown',
+          contactEmail:  author.email || '',
+          replyText:     stripHtml(userReply.body || ''),
+          replyDate:     userReply.created_at,
+          sourceSubject: stripHtml(conv.source?.subject || '') || '(no subject)',
+        });
+      }
+
+      replies.sort((a, b) => b.replyDate - a.replyDate);
+      return res.status(200).json({
+        replies,
+        windowHours: hours,
+        fetchedConversations: convs.length,
+      });
+    }
+
+    return res.status(400).json({ error: 'Invalid mode. Use "search", "replies", "recentSubjects", or "firehose".' });
 
   } catch (err) {
     return res.status(500).json({ error: err.message });

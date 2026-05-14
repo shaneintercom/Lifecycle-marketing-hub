@@ -504,6 +504,11 @@
             <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg>
             Calendar
         </button>
+        <button data-tab="pulse">
+            <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Pulse
+            <span style="margin-left:auto;font-size:9px;font-weight:700;color:var(--brand);background:rgba(129,140,248,0.15);padding:1px 6px;border-radius:8px;letter-spacing:0.05em;">NEW</span>
+        </button>
         <div class="sidebar-section-label">Campaigns</div>
         <button data-tab="library">
             <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
@@ -718,6 +723,68 @@
                 <dt>Stat sig</dt>
                 <dd>A test has a statistically significant winner when the gap between variants is unlikely to be noise at p &lt; 0.05.</dd>
             </dl>
+        </div>
+    </div>
+
+    <!-- ── PULSE TAB ─────────────────────────────────────────────────────── -->
+    <div id="tab-pulse" class="tab-content">
+        <div class="dash-narrative" style="margin-bottom:18px;">
+            <div class="dash-narrative-label"><span class="live-dot"></span>Pulse · v1</div>
+            <div class="dash-narrative-body">
+                A live read of what's happening right now: customer replies coming in, campaigns sending today, signals worth knowing about.
+                Each panel has a refresh button. Data is fresh as of when you click.
+            </div>
+        </div>
+
+        <!-- Panel 1: Reply firehose -->
+        <div style="margin-bottom:24px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:12px;flex-wrap:wrap;">
+                <div>
+                    <div class="dash-section-label" style="margin:0 0 4px;">Reply firehose<span class="info-tip" data-tip="The most recent customer replies across all live conversations in the last 48 hours, classified for sentiment and theme. Pulls from Intercom Conversations API and the Haiku classifier.">i</span></div>
+                    <div style="font-size:12px;color:var(--muted);">Newest customer replies, classified by sentiment and theme · <span id="pulse-firehose-meta">never refreshed</span></div>
+                </div>
+                <button class="btn-sm" id="pulse-firehose-refresh" onclick="refreshPulseFirehose()" style="display:flex;align-items:center;gap:6px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                    Refresh
+                </button>
+            </div>
+            <div id="pulse-firehose" class="dash-stat-card" style="padding:0;min-height:120px;">
+                <div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Click Refresh to load the latest replies.</div>
+            </div>
+        </div>
+
+        <!-- Panel 2: Live send performance -->
+        <div style="margin-bottom:24px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:12px;flex-wrap:wrap;">
+                <div>
+                    <div class="dash-section-label" style="margin:0 0 4px;">Live send performance<span class="info-tip" data-tip="Every campaign (RULESET_ID) that sent emails in the last 72 hours, ranked by send volume. Open and click rates accumulate as recipients engage. Source: Snowflake FCT_OUTBOUND_RECEIPTS.">i</span></div>
+                    <div style="font-size:12px;color:var(--muted);">Campaigns sent in the last 72 hours · <span id="pulse-perf-meta">never refreshed</span></div>
+                </div>
+                <button class="btn-sm" id="pulse-perf-refresh" onclick="refreshPulsePerf()" style="display:flex;align-items:center;gap:6px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                    Refresh
+                </button>
+            </div>
+            <div id="pulse-perf" class="dash-stat-card" style="padding:0;min-height:120px;">
+                <div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Click Refresh to load the latest sends.</div>
+            </div>
+        </div>
+
+        <!-- Panel 3: Recent shipped — quick links to impact analysis -->
+        <div style="margin-bottom:24px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:12px;flex-wrap:wrap;">
+                <div>
+                    <div class="dash-section-label" style="margin:0 0 4px;">Behavior delta · recently shipped<span class="info-tip" data-tip="Campaigns shipped between 7 and 30 days ago. Click any one to run the existing impact analysis against a matched control group from Snowflake.">i</span></div>
+                    <div style="font-size:12px;color:var(--muted);">Campaigns from the last 7-30 days, ready for impact analysis · <span id="pulse-delta-meta">never refreshed</span></div>
+                </div>
+                <button class="btn-sm" id="pulse-delta-refresh" onclick="refreshPulseDelta()" style="display:flex;align-items:center;gap:6px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                    Refresh
+                </button>
+            </div>
+            <div id="pulse-delta" class="dash-stat-card" style="padding:0;min-height:120px;">
+                <div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Click Refresh to list campaigns ready for impact analysis.</div>
+            </div>
         </div>
     </div>
 
@@ -1470,6 +1537,7 @@ const TAB_TITLES = {
     reports:        { title: 'Generate Report',      sub: 'Build and share campaign performance reports' },
     productupdates: { title: 'Product Updates',      sub: 'Track and brief new product launches' },
     seriesreplies:  { title: 'Series Replies',       sub: 'Respond to email series engagement' },
+    pulse:          { title: 'Pulse',                 sub: 'Live read of replies, sends, and signals worth knowing' },
 };
 document.querySelectorAll('#sidebar nav button[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1668,6 +1736,203 @@ function renderLastRefreshed() {
 
 function openGlossary()  { document.getElementById('glossary-modal-bg').classList.add('open'); }
 function closeGlossary() { document.getElementById('glossary-modal-bg').classList.remove('open'); }
+
+// ── PULSE TAB ────────────────────────────────────────────────────────────────
+function _pulseTimeAgo(unixSeconds) {
+    if (!unixSeconds) return '';
+    const now = Math.floor(Date.now() / 1000);
+    const diff = Math.max(0, now - unixSeconds);
+    if (diff < 60)      return `${diff}s ago`;
+    if (diff < 3600)    return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400)   return `${Math.floor(diff/3600)}h ago`;
+    return `${Math.floor(diff/86400)}d ago`;
+}
+function _pulseRefreshedTag() {
+    return `refreshed ${new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}`;
+}
+function _pulseSentimentPill(s) {
+    const cfg = {
+        positive: { bg: 'rgba(16,185,129,0.15)', fg: '#10b981', label: 'Positive' },
+        negative: { bg: 'rgba(252,211,77,0.15)', fg: '#fcd34d', label: 'Negative' },
+        neutral:  { bg: 'rgba(108,132,162,0.18)', fg: 'var(--muted)', label: 'Neutral' },
+    }[s] || { bg: 'rgba(108,132,162,0.18)', fg: 'var(--muted)', label: '—' };
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:${cfg.bg};color:${cfg.fg};letter-spacing:0.03em;">${cfg.label}</span>`;
+}
+function _pulseConcernPill(level) {
+    if (!level) return '';
+    const cfg = [
+        null,
+        { bg: 'rgba(108,132,162,0.18)', fg: 'var(--muted)', label: 'Note' },
+        { bg: 'rgba(252,211,77,0.18)',  fg: '#fcd34d', label: 'Escalate' },
+        { bg: 'rgba(248,113,113,0.22)', fg: '#f87171', label: 'Urgent' },
+    ][level];
+    if (!cfg) return '';
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:${cfg.bg};color:${cfg.fg};letter-spacing:0.03em;margin-left:4px;">${cfg.label}</span>`;
+}
+
+async function refreshPulseFirehose() {
+    const el      = document.getElementById('pulse-firehose');
+    const metaEl  = document.getElementById('pulse-firehose-meta');
+    const btn     = document.getElementById('pulse-firehose-refresh');
+    btn.disabled = true; btn.style.opacity = '0.6';
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Pulling recent conversations from Intercom...</div>`;
+    try {
+        const r1 = await fetch('/api/intercom-series', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'firehose', hours: 48 }),
+        });
+        const d1 = await r1.json();
+        if (!r1.ok) throw new Error(d1.error || `Intercom error ${r1.status}`);
+        const replies = d1.replies || [];
+        if (!replies.length) {
+            el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">No customer replies in the last ${d1.windowHours} hours.</div>`;
+            metaEl.textContent = _pulseRefreshedTag();
+            return;
+        }
+        // Classify in one batch (max 60 per the existing endpoint)
+        const batch = replies.slice(0, 60);
+        const r2 = await fetch('/api/claude-series-analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'classify', subject: 'Live firehose', replies: batch.map(r => ({ convId: r.convId, replyText: r.replyText })) }),
+        });
+        const d2 = await r2.json();
+        const byId = new Map((d2.classifications || []).map(c => [c.convId, c]));
+
+        const cards = batch.map(r => {
+            const c = byId.get(r.convId) || {};
+            const snippet = (r.replyText || '').slice(0, 220);
+            const more = (r.replyText || '').length > 220 ? '…' : '';
+            return `
+            <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+                    ${_pulseSentimentPill(c.sentiment)}
+                    ${c.theme ? `<span style="font-size:10px;font-weight:700;color:var(--brand);background:rgba(129,140,248,0.12);padding:2px 8px;border-radius:4px;letter-spacing:0.03em;">${c.theme}</span>` : ''}
+                    ${_pulseConcernPill(c.concern)}
+                    <span style="margin-left:auto;font-size:11px;color:var(--muted);">${_pulseTimeAgo(r.replyDate)}</span>
+                </div>
+                <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:6px;">${snippet.replace(/</g, '&lt;')}${more}</div>
+                <div style="font-size:11px;color:var(--muted);">${(r.contactName || 'Unknown').replace(/</g, '&lt;')} · ${(r.sourceSubject || '').replace(/</g, '&lt;').slice(0, 80)}</div>
+            </div>`;
+        }).join('');
+
+        el.innerHTML = cards;
+        metaEl.textContent = `${batch.length} replies · ${_pulseRefreshedTag()}`;
+    } catch (err) {
+        el.innerHTML = `<div style="padding:20px;color:#fcd34d;font-size:13px;">Couldn't load firehose: ${err.message}</div>`;
+    } finally {
+        btn.disabled = false; btn.style.opacity = '1';
+    }
+}
+
+async function refreshPulsePerf() {
+    const el     = document.getElementById('pulse-perf');
+    const metaEl = document.getElementById('pulse-perf-meta');
+    const btn    = document.getElementById('pulse-perf-refresh');
+    btn.disabled = true; btn.style.opacity = '0.6';
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Querying Snowflake for the last 72 hours of sends...</div>`;
+    try {
+        const r = await fetch('/api/campaign-impact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'liveSendPerf', hours: 72 }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || `Snowflake error ${r.status}`);
+        const campaigns = d.campaigns || [];
+        if (!campaigns.length) {
+            el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">No campaigns sent in the last ${d.windowHours} hours.</div>`;
+            metaEl.textContent = _pulseRefreshedTag();
+            return;
+        }
+        const maxSends = Math.max(...campaigns.map(c => c.sends), 1);
+        const rows = campaigns.map(c => {
+            const pct = (c.sends / maxSends) * 100;
+            const open = c.openRate != null ? c.openRate.toFixed(1) + '%' : '—';
+            const click = c.clickRate != null ? c.clickRate.toFixed(1) + '%' : '—';
+            return `
+            <div style="display:grid;grid-template-columns:140px 1fr 80px 80px 80px 140px;gap:12px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--border);font-size:12px;">
+                <div style="font-family:'JetBrains Mono',monospace;color:var(--muted);">${c.rulesetId}</div>
+                <div style="height:8px;background:#0f1c30;border-radius:3px;position:relative;overflow:hidden;">
+                    <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:var(--brand);border-radius:3px;"></div>
+                </div>
+                <div style="text-align:right;font-weight:700;color:var(--text);font-size:13px;">${c.sends.toLocaleString()}</div>
+                <div style="text-align:right;color:var(--text);">${open}</div>
+                <div style="text-align:right;color:var(--text);">${click}</div>
+                <div style="text-align:right;color:var(--muted);font-size:11px;">${c.lastSent || ''}</div>
+            </div>`;
+        }).join('');
+        el.innerHTML = `
+            <div style="display:grid;grid-template-columns:140px 1fr 80px 80px 80px 140px;gap:12px;padding:10px 18px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-family:'JetBrains Mono',monospace;font-weight:500;">
+                <div>Ruleset</div>
+                <div>Volume</div>
+                <div style="text-align:right;">Sends</div>
+                <div style="text-align:right;">Open</div>
+                <div style="text-align:right;">Click</div>
+                <div style="text-align:right;">Last sent</div>
+            </div>
+            ${rows}
+        `;
+        metaEl.textContent = `${campaigns.length} campaigns · ${_pulseRefreshedTag()}`;
+    } catch (err) {
+        el.innerHTML = `<div style="padding:20px;color:#fcd34d;font-size:13px;">Couldn't load live send performance: ${err.message}</div>`;
+    } finally {
+        btn.disabled = false; btn.style.opacity = '1';
+    }
+}
+
+async function refreshPulseDelta() {
+    const el     = document.getElementById('pulse-delta');
+    const metaEl = document.getElementById('pulse-delta-meta');
+    const btn    = document.getElementById('pulse-delta-refresh');
+    btn.disabled = true; btn.style.opacity = '0.6';
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Loading recently shipped campaigns...</div>`;
+    try {
+        const today = new Date();
+        const from  = new Date(today.getTime() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+        const to    = new Date(today.getTime() -  7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+        const { data } = await db.from('lifecycle_campaigns')
+            .select('campaign_id,campaign_name,send_date,category,notes,parent_campaign')
+            .gte('send_date', from).lte('send_date', to)
+            .is('parent_campaign', null)
+            .order('send_date', { ascending: false });
+        const rows = (data || []).filter(c => c.notes && c.notes.toLowerCase().includes('done'));
+        if (!rows.length) {
+            el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">No shipped campaigns in the 7-30 day window.</div>`;
+            metaEl.textContent = _pulseRefreshedTag();
+            return;
+        }
+        const html = rows.map(c => {
+            const dateStr = c.send_date ? new Date(c.send_date + 'T00:00:00').toLocaleDateString('en-AU', { day:'numeric', month:'short' }) : '—';
+            const daysAgo = c.send_date ? Math.floor((today - new Date(c.send_date + 'T00:00:00')) / (1000 * 3600 * 24)) : '';
+            return `
+            <div style="display:grid;grid-template-columns:1fr 110px 90px 150px;gap:12px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--border);">
+                <div>
+                    <div style="font-size:13px;font-weight:600;color:var(--text);">${(c.campaign_name || '').replace(/</g, '&lt;')}</div>
+                    <div style="font-size:11px;color:var(--muted);">${c.category || '—'}</div>
+                </div>
+                <div style="font-size:11px;color:var(--muted);">${dateStr}</div>
+                <div style="font-size:11px;color:var(--muted);">${daysAgo} days ago</div>
+                <div style="text-align:right;">
+                    <button class="btn-sm" style="font-size:11px;padding:4px 10px;" onclick="_pulseOpenImpact()">Run impact ↗</button>
+                </div>
+            </div>`;
+        }).join('');
+        el.innerHTML = html;
+        metaEl.textContent = `${rows.length} campaigns · ${_pulseRefreshedTag()}`;
+    } catch (err) {
+        el.innerHTML = `<div style="padding:20px;color:#fcd34d;font-size:13px;">Couldn't load: ${err.message}</div>`;
+    } finally {
+        btn.disabled = false; btn.style.opacity = '1';
+    }
+}
+
+// Jump to the Reports tab where impact analysis lives. We don't store the Intercom
+// ruleset ID on the campaign record yet, so the user enters it manually for now.
+function _pulseOpenImpact() {
+    document.querySelector('#sidebar nav button[data-tab="reports"]').click();
+}
 
 // Refetch + rerender only the four topline KPI cards. Lightweight (two scoped queries).
 async function loadDashKPIs(offset) {
