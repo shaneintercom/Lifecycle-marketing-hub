@@ -2,45 +2,66 @@ module.exports = async function (req, res) {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
   // ── SUBJECT PREDICT MODE ──────────────────────────────────────────────────
-  // Forward-looking: given a draft subject + similar past campaigns, return a
-  // predicted open-rate range, 3 verbatim winning references, and one tightening
-  // suggestion. JSON-only response.
+  // The numerical range, σ, and cohort size are computed client-side from a
+  // pattern-matched cohort (P25–P75). Claude is asked only for the narrative
+  // layer: a grounded reasoning sentence, a one-line "why it works" per
+  // reference, and one concrete tightening suggestion. JSON-only response.
   if (req.body?.mode === 'subjectPredict') {
-    const { subject, category, audience, history } = req.body;
+    const { subject, category, audience, stats, features, featureLifts, references } = req.body;
     if (!subject || !subject.trim()) return res.status(400).json({ error: 'subject required' });
-    if (!Array.isArray(history) || !history.length) {
-      return res.status(400).json({ error: 'history array required (similar past campaigns)' });
+    if (!stats || typeof stats.p25 !== 'number') {
+      return res.status(400).json({ error: 'stats object required (p25, p75, mean, sd, n)' });
+    }
+    if (!Array.isArray(references) || !references.length) {
+      return res.status(400).json({ error: 'references array required (closest matches)' });
     }
 
-    const lines = history.slice(0, 50).map((h, i) => {
-      const rate = h.open_rate != null ? (h.open_rate * 100).toFixed(1) + '%' : '—';
-      return `[${i + 1}] (${h.category || 'uncategorised'}) Open ${rate}: "${(h.subject_line || '').slice(0, 200)}"`;
-    }).join('\n');
+    const featurePills = Object.entries(features || {})
+      .filter(([k, v]) => v === true)
+      .map(([k]) => k)
+      .join(', ') || 'none detected';
 
-    const system = `You are a senior lifecycle marketing analyst at Intercom (B2B SaaS, AI-first customer service platform). You predict open-rate ranges for draft subject lines using only the historical campaigns provided. You return ONLY valid JSON, no preamble, no markdown fences. Be honest, evidence-led, no filler. No em dashes.`;
+    const liftLines = (featureLifts || []).slice(0, 6).map(f =>
+      `- ${f.label}: ${f.avgWith.toFixed(1)}% with vs ${f.avgWithout.toFixed(1)}% without (${f.liftPp >= 0 ? '+' : ''}${f.liftPp.toFixed(1)}pp, n=${f.nWith})`
+    ).join('\n') || '(none)';
+
+    const refLines = references.slice(0, 5).map((r, i) =>
+      `[${i + 1}] (${r.category || 'uncategorised'}) Open ${r.openRate.toFixed(1)}%: "${(r.subject || '').slice(0, 200)}"`
+    ).join('\n');
+
+    const system = `You are a senior lifecycle marketing analyst at Intercom (B2B SaaS, AI-first customer service platform). The numerical prediction has ALREADY been computed mathematically from a pattern-matched cohort of the user's own past sends. Your job is the narrative layer ONLY: a reasoning sentence that explains the math, a one-line "why it works" per reference, and one concrete tightening suggestion. Do NOT propose your own range — use the numbers supplied. You return ONLY valid JSON, no preamble, no markdown fences. Be honest, evidence-led, no filler. No em dashes.`;
 
     const userPrompt = `Draft subject line: "${subject.trim()}"
 ${category ? `Target category: ${category}` : 'Category: not specified'}
 ${audience ? `Audience hint: ${audience}` : ''}
 
-Historical campaigns (most relevant first):
-${lines}
+Detected features in the draft: ${featurePills}
 
-Predict performance for the draft. Return JSON in this exact shape:
+PRE-COMPUTED COHORT STATS (use these numbers verbatim — do not invent your own):
+- Cohort size: n=${stats.n} pattern-matched past sends
+- P25–P75 open rate: ${stats.p25.toFixed(1)}% to ${stats.p75.toFixed(1)}%
+- Median: ${stats.p50.toFixed(1)}% · Mean: ${stats.mean.toFixed(1)}% · σ: ${stats.sd.toFixed(1)}pp
+- Full cohort range: ${stats.min.toFixed(1)}% to ${stats.max.toFixed(1)}%
+- Confidence (size + spread based): ${stats.confidence}
+
+Per-feature historical lift (within ${category || 'full library'}):
+${liftLines}
+
+Closest references from the cohort (already selected by similarity + open rate):
+${refLines}
+
+Return JSON in this exact shape:
 {
-  "predictedRangeLow": <number, open rate as percentage like 38.5>,
-  "predictedRangeHigh": <number, open rate as percentage like 52.0>,
-  "confidence": "low" | "medium" | "high",
-  "reasoning": "<2-3 sentence explanation grounded in the history above, referencing example numbers>",
+  "reasoning": "<2 short sentences. Cite the P25–P75 range, n, and ONE specific feature lift that drove it up or down. Do not restate raw stats without interpretation.>",
   "references": [
-    { "subject": "<verbatim subject from history>", "openRate": <number as percentage>, "whyItWorks": "<one sentence>" },
+    { "subject": "<verbatim subject from the references above>", "openRate": <number — the exact one supplied>, "whyItWorks": "<one sentence tying this subject's structure back to the draft>" },
     { "subject": "...", "openRate": <number>, "whyItWorks": "..." },
     { "subject": "...", "openRate": <number>, "whyItWorks": "..." }
   ],
-  "suggestion": "<one specific edit to the draft drawn from winning patterns in the history; be concrete, propose actual wording. If the draft is already strong, say so plainly>"
+  "suggestion": "<one specific edit to the draft drawn from the historical lifts above. Propose actual wording. If draft already exploits the high-lift patterns, say 'Already strong on [pattern]; the only further move would be [X]'.>"
 }
 
-Pick the three references that are most relevant to the draft AND had strong open rates. If the history is too thin to predict confidently, set confidence to "low" and widen the range accordingly.`;
+Pick the three references that map most closely to the draft's structure. Reference openRate values must match the numbers supplied above exactly.`;
 
     try {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -67,7 +88,7 @@ Pick the three references that are most relevant to the draft AND had strong ope
       let parsed;
       try { parsed = JSON.parse(raw); }
       catch (e) { return res.status(500).json({ error: 'Model returned non-JSON', raw: raw.slice(0, 300) }); }
-      return res.status(200).json({ prediction: parsed, historyConsidered: Math.min(history.length, 50) });
+      return res.status(200).json({ prediction: parsed });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }

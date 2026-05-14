@@ -506,7 +506,7 @@
         </button>
         <button data-tab="subjectlab">
             <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M10 2v7.31L5.72 18.6A2 2 0 007.59 21h8.82a2 2 0 001.87-2.4L14 9.31V2"/><line x1="8.5" y1="2" x2="15.5" y2="2"/></svg>
-            Subject Lab
+            Subject Line Lab
             <span style="margin-left:auto;font-size:9px;font-weight:700;color:var(--brand);background:rgba(129,140,248,0.15);padding:1px 6px;border-radius:8px;letter-spacing:0.05em;">NEW</span>
         </button>
         <div class="sidebar-section-label">Campaigns</div>
@@ -571,9 +571,6 @@
             <div class="dash-narrative-label"><span class="live-dot"></span><span id="dash-narrative-eyebrow">This quarter</span></div>
             <div class="dash-narrative-body" id="dash-narrative-body"></div>
         </div>
-
-        <!-- Trend watch — auto-surfaced drift, no controls needed -->
-        <div id="dash-trend-watch" style="margin-bottom:16px;"></div>
 
         <!-- ── GROUP: HOW SENDS PERFORMED ─────────────────────────────────── -->
         <div class="dash-group-header">
@@ -735,7 +732,7 @@
          a suggestion drawn from historical winners. -->
     <div id="tab-subjectlab" class="tab-content">
         <div class="dash-narrative" style="margin-bottom:20px;">
-            <div class="dash-narrative-label"><span class="live-dot"></span>Subject Lab · v1</div>
+            <div class="dash-narrative-label"><span class="live-dot"></span>Subject Line Lab · v1</div>
             <div class="dash-narrative-body">
                 Paste a draft subject line, pick a category, and get an open-rate prediction grounded in your own historical sends — plus the top performers in that category as references and one specific suggestion to tighten the draft.
             </div>
@@ -1528,7 +1525,7 @@ const TAB_TITLES = {
     reports:        { title: 'Generate Report',      sub: 'Build and share campaign performance reports' },
     productupdates: { title: 'Product Updates',      sub: 'Track and brief new product launches' },
     seriesreplies:  { title: 'Series Replies',       sub: 'Respond to email series engagement' },
-    subjectlab:     { title: 'Subject Lab',           sub: 'Predict open rate for a draft subject, grounded in your past sends' },
+    subjectlab:     { title: 'Subject Line Lab',      sub: 'Predict open rate for a draft subject, grounded in your past sends' },
 };
 document.querySelectorAll('#sidebar nav button[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1640,7 +1637,6 @@ async function loadDashboard() {
     renderQuarterlyThroughput(hist);
     renderUpcomingLaunches();
     renderDashboardNarrative(hist, q1, all);
-    renderTrendWatch(hist);
     renderLastRefreshed();
 
     // KPI cards use the current quarter by default but can be pivoted via the switcher
@@ -1729,9 +1725,82 @@ function renderLastRefreshed() {
 function openGlossary()  { document.getElementById('glossary-modal-bg').classList.add('open'); }
 function closeGlossary() { document.getElementById('glossary-modal-bg').classList.remove('open'); }
 
-// ── SUBJECT LAB ──────────────────────────────────────────────────────────────
-// Predict open-rate range for a draft subject by fetching similar past campaigns
-// from Supabase, then asking Claude to ground the prediction in those.
+// ── SUBJECT LINE LAB ─────────────────────────────────────────────────────────
+// Credibility-first predictor. We compute the open-rate range mathematically
+// from a pattern-matched cohort of past sends, then ask Claude only for the
+// reasoning, references, and one specific suggestion. No guessed ranges.
+
+// Detect structural features in a subject line. Used both for the draft and
+// every historical row, so we can match cohorts on shared patterns.
+function _extractSubjectFeatures(s) {
+    const t = (s || '').trim();
+    const lower = t.toLowerCase();
+    const wordCount = t.split(/\s+/).filter(Boolean).length;
+    const charLen   = t.length;
+
+    // Personalisation: handlebars/template vars OR a leading "First," pattern.
+    const hasTemplateVar = /\{\{?\s*[\w.]+\s*\}?\}/.test(t) || /%[A-Z_]+%/.test(t);
+    const hasLeadingName = /^[A-Z][a-z]+,\s/.test(t);
+
+    return {
+        lengthBucket: charLen < 35 ? 'short' : charLen <= 55 ? 'medium' : 'long',
+        charLen,
+        wordCount,
+        hasPersonalization: hasTemplateVar || hasLeadingName,
+        hasQuestion: /\?/.test(t),
+        hasNumber:   /\d/.test(t),
+        hasEmoji:    /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(t),
+        hasUrgency:  /\b(now|today|tomorrow|last\s+chance|ending|ends|deadline|hours? left|expir|don'?t miss)\b/i.test(t),
+        startsWithVerb: /^(get|see|try|join|watch|read|learn|build|launch|ship|meet|discover|stop|start|fix|find)\b/i.test(t),
+        hasYou: /\byou(r|rs|rself)?\b/i.test(t),
+        allCaps: t.length > 5 && t === t.toUpperCase(),
+        startsWithQWord: /^(who|what|why|how|when|where)\b/i.test(t),
+    };
+}
+
+const _FEATURE_KEYS = [
+    'hasPersonalization', 'hasQuestion', 'hasNumber', 'hasEmoji',
+    'hasUrgency', 'startsWithVerb', 'hasYou', 'startsWithQWord',
+];
+const _FEATURE_LABELS = {
+    hasPersonalization: 'Personalisation',
+    hasQuestion:        'Question',
+    hasNumber:          'Number',
+    hasEmoji:           'Emoji',
+    hasUrgency:         'Urgency cue',
+    startsWithVerb:     'Action verb opener',
+    hasYou:             '"You" voice',
+    startsWithQWord:    'Question word opener',
+};
+
+function _percentile(sortedArr, p) {
+    if (!sortedArr.length) return 0;
+    if (sortedArr.length === 1) return sortedArr[0];
+    const idx = (sortedArr.length - 1) * p;
+    const lo = Math.floor(idx), hi = Math.ceil(idx);
+    if (lo === hi) return sortedArr[lo];
+    return sortedArr[lo] + (sortedArr[hi] - sortedArr[lo]) * (idx - lo);
+}
+function _mean(arr)   { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
+function _stddev(arr) {
+    if (arr.length < 2) return 0;
+    const m = _mean(arr);
+    return Math.sqrt(arr.reduce((a, b) => a + (b - m) ** 2, 0) / arr.length);
+}
+
+// Score each historical row by overlap with the draft's features. Same category +
+// same length bucket count more than other features. The cohort is the rows
+// scoring at or above a threshold (with fallbacks if too thin).
+function _scoreSimilarity(draftFeat, row, draftCategory) {
+    let score = 0;
+    if (draftCategory && row.category === draftCategory) score += 3;
+    if (row.features.lengthBucket === draftFeat.lengthBucket) score += 2;
+    _FEATURE_KEYS.forEach(k => {
+        if (row.features[k] === draftFeat[k]) score += 1;
+    });
+    return score;
+}
+
 async function predictSubject() {
     const subject  = document.getElementById('sl-subject').value.trim();
     const category = document.getElementById('sl-category').value.trim();
@@ -1745,52 +1814,152 @@ async function predictSubject() {
     btn.disabled = true; btn.textContent = 'Analysing…';
     emptyEl.style.display = 'none';
     resultEl.style.display = 'block';
-    resultEl.innerHTML = `<div class="card" style="text-align:center;color:var(--muted);">Pulling similar past campaigns and asking Claude for a prediction...</div>`;
+    resultEl.innerHTML = `<div class="card" style="text-align:center;color:var(--muted);">Pulling matched cohort from your library and computing the range...</div>`;
 
     try {
-        // Pull up to 200 candidate campaigns. Prefer same-category; widen if too few.
-        let q = db.from('lifecycle_campaigns')
+        const { data: raw } = await db.from('lifecycle_campaigns')
             .select('campaign_name,subject_line,category,open_rate,send_date')
             .not('subject_line', 'is', null)
             .not('open_rate', 'is', null)
             .is('parent_campaign', null)
             .order('send_date', { ascending: false })
-            .limit(200);
-        if (category) q = q.eq('category', category);
-        let { data } = await q;
-        // Fallback: if category-scoped query returned <8 rows, widen to all categories.
-        if (category && (!data || data.length < 8)) {
-            const { data: all } = await db.from('lifecycle_campaigns')
-                .select('campaign_name,subject_line,category,open_rate,send_date')
-                .not('subject_line', 'is', null)
-                .not('open_rate', 'is', null)
-                .is('parent_campaign', null)
-                .order('send_date', { ascending: false })
-                .limit(200);
-            data = all || [];
-        }
-        if (!data || !data.length) {
+            .limit(400);
+        const data = raw || [];
+        if (!data.length) {
             resultEl.innerHTML = `<div class="card" style="color:var(--muted);">No past campaigns have a subject_line + open_rate logged. Predict needs at least a handful of historical sends.</div>`;
             return;
         }
 
-        const sorted = category
-            ? [...data].sort((a, b) => (a.category === category ? -1 : 1) - (b.category === category ? -1 : 1))
-            : data;
-        const history = sorted.slice(0, 50).map(c => ({
-            subject_line: c.subject_line,
-            category:     c.category,
-            open_rate:    c.open_rate,
+        // Pre-compute features on every row once.
+        const enriched = data.map(c => ({
+            campaign_name: c.campaign_name,
+            subject_line:  c.subject_line,
+            category:      c.category,
+            open_rate:     c.open_rate,
+            send_date:     c.send_date,
+            features:      _extractSubjectFeatures(c.subject_line),
         }));
 
+        const draftFeat = _extractSubjectFeatures(subject);
+
+        // Rank by similarity score; cohort = top N where N grows until we have ≥10 rows.
+        const scored = enriched
+            .map(r => ({ ...r, _score: _scoreSimilarity(draftFeat, r, category) }))
+            .sort((a, b) => b._score - a._score);
+
+        // Cohort = rows scoring within 2 points of the top scorer, padded to min 8.
+        const topScore = scored[0]?._score || 0;
+        let cohort = scored.filter(r => r._score >= topScore - 2);
+        if (cohort.length < 8) cohort = scored.slice(0, Math.min(15, scored.length));
+
+        const openRates = cohort.map(r => r.open_rate).sort((a, b) => a - b);
+        const p25 = _percentile(openRates, 0.25);
+        const p50 = _percentile(openRates, 0.50);
+        const p75 = _percentile(openRates, 0.75);
+        const sd  = _stddev(openRates);
+        const meanCohort = _mean(openRates);
+
+        // Per-feature lift: for each feature the draft HAS, what's the avg open rate
+        // across the (category-scoped where possible) library with that feature vs without?
+        const liftPool = category ? enriched.filter(r => r.category === category) : enriched;
+        const pool = liftPool.length >= 10 ? liftPool : enriched;
+        const featureLifts = _FEATURE_KEYS
+            .filter(k => draftFeat[k])
+            .map(k => {
+                const withF    = pool.filter(r => r.features[k]).map(r => r.open_rate);
+                const withoutF = pool.filter(r => !r.features[k]).map(r => r.open_rate);
+                if (withF.length < 2 || withoutF.length < 2) return null;
+                const liftPp = (_mean(withF) - _mean(withoutF)) * 100;
+                return {
+                    key: k,
+                    label: _FEATURE_LABELS[k],
+                    nWith: withF.length,
+                    avgWith: _mean(withF) * 100,
+                    avgWithout: _mean(withoutF) * 100,
+                    liftPp,
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => Math.abs(b.liftPp) - Math.abs(a.liftPp));
+
+        // Risk flags drawn directly from the draft + cohort math.
+        const flags = [];
+        if (draftFeat.charLen > 70) flags.push(`Subject is ${draftFeat.charLen} chars — most inbox clients truncate after ~60.`);
+        if (draftFeat.allCaps) flags.push('All-caps reads as spam in B2B inboxes.');
+        if (draftFeat.hasEmoji && (category === 'Onboarding' || category === 'Migrations')) {
+            flags.push('Emoji in transactional-feeling categories tends to underperform.');
+        }
+        if (cohort.length < 5) flags.push(`Cohort is only ${cohort.length} matching campaigns — widen with more history before trusting this range.`);
+
+        // Confidence purely from cohort size + spread.
+        const confidence = cohort.length >= 15 && sd < 0.10
+            ? 'high'
+            : cohort.length >= 8
+                ? 'medium'
+                : 'low';
+
+        const stats = {
+            p25: p25 * 100,
+            p50: p50 * 100,
+            p75: p75 * 100,
+            mean: meanCohort * 100,
+            sd:  sd * 100,
+            n:   cohort.length,
+            min: openRates[0] * 100,
+            max: openRates[openRates.length - 1] * 100,
+            confidence,
+        };
+
+        // Closest references: top 3 of the cohort by score AND best open rates among them.
+        const refsCandidates = cohort
+            .slice()
+            .sort((a, b) => b.open_rate - a.open_rate)
+            .slice(0, 8);
+        const references = refsCandidates.slice(0, 3).map(r => ({
+            subject:  r.subject_line,
+            openRate: r.open_rate * 100,
+            category: r.category,
+        }));
+
+        // Histogram bins (5pp buckets, 0-100).
+        const bins = Array.from({ length: 20 }, () => 0);
+        enriched.forEach(r => {
+            const b = Math.min(19, Math.floor((r.open_rate * 100) / 5));
+            bins[b]++;
+        });
+        const cohortBins = Array.from({ length: 20 }, () => 0);
+        cohort.forEach(r => {
+            const b = Math.min(19, Math.floor((r.open_rate * 100) / 5));
+            cohortBins[b]++;
+        });
+
+        // Ask Claude only for the narrative layer: reasoning + per-reference whyItWorks + suggestion.
+        // The numeric range is mathematical; Claude doesn't invent it.
         const r = await fetch('/api/claude-learning', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: 'subjectPredict', subject, category, audience, history }),
+            body: JSON.stringify({
+                mode: 'subjectPredict',
+                subject, category, audience,
+                stats,
+                features: draftFeat,
+                featureLifts,
+                references,
+            }),
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || `Claude ${r.status}`);
-        _renderSubjectPrediction(d.prediction, subject, d.historyConsidered);
+
+        _renderSubjectPrediction({
+            stats,
+            draftFeat,
+            featureLifts,
+            references: (d.prediction?.references || []).length ? d.prediction.references : references.map(rf => ({ ...rf, whyItWorks: '' })),
+            reasoning: d.prediction?.reasoning || '',
+            suggestion: d.prediction?.suggestion || '',
+            flags,
+            histogram: { bins, cohortBins, libraryTotal: enriched.length, cohortTotal: cohort.length },
+        }, subject);
     } catch (err) {
         resultEl.innerHTML = `<div class="card" style="color:#fcd34d;">Couldn't run prediction: ${err.message}</div>`;
     } finally {
@@ -1798,154 +1967,110 @@ async function predictSubject() {
     }
 }
 
-function _renderSubjectPrediction(p, draft, n) {
+function _renderSubjectPrediction(out, draft) {
     const el = document.getElementById('sl-result');
-    if (!p) { el.innerHTML = `<div class="card" style="color:var(--muted);">No prediction returned.</div>`; return; }
-    const cConf = { low: '#fcd34d', medium: 'var(--brand)', high: '#10b981' }[p.confidence] || 'var(--muted)';
-    const low  = Number(p.predictedRangeLow);
-    const high = Number(p.predictedRangeHigh);
-    const mid  = (low + high) / 2;
-    const refs = (p.references || []).slice(0, 3);
+    if (!out) { el.innerHTML = `<div class="card" style="color:var(--muted);">No prediction returned.</div>`; return; }
+    const { stats, draftFeat, featureLifts, references, reasoning, suggestion, flags, histogram } = out;
+    const cConf = { low: '#fcd34d', medium: 'var(--brand)', high: '#10b981' }[stats.confidence] || 'var(--muted)';
+
+    // Detected feature pills (only the ones present in the draft).
+    const detected = _FEATURE_KEYS.filter(k => draftFeat[k]).map(k => _FEATURE_LABELS[k]);
+    detected.unshift(`${draftFeat.charLen} chars (${draftFeat.lengthBucket})`);
+
+    // Histogram bar set: cohort overlay on top of full library.
+    const maxBin = Math.max(...histogram.bins, 1);
+    const histBars = histogram.bins.map((n, i) => {
+        const cohortN = histogram.cohortBins[i];
+        const isInP25P75 = i * 5 >= stats.p25 && i * 5 < stats.p75;
+        const hLib    = (n / maxBin) * 100;
+        const hCohort = (cohortN / maxBin) * 100;
+        const bg      = isInP25P75 ? 'rgba(129,140,248,0.25)' : 'rgba(99,118,150,0.15)';
+        const bgCohort = isInP25P75 ? 'var(--brand)'           : 'rgba(99,118,150,0.55)';
+        return `
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:80px;position:relative;" title="${i * 5}-${i * 5 + 5}%: ${n} campaigns (${cohortN} in cohort)">
+            <div style="width:100%;height:${hLib}%;background:${bg};border-radius:2px 2px 0 0;position:relative;">
+                <div style="position:absolute;bottom:0;left:0;right:0;height:${cohortN ? (cohortN / n) * 100 : 0}%;background:${bgCohort};border-radius:2px 2px 0 0;"></div>
+            </div>
+        </div>`;
+    }).join('');
 
     el.innerHTML = `
     <div class="card" style="margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-            <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-family:'JetBrains Mono',monospace;">Predicted open rate</div>
-            <div style="font-size:11px;color:${cConf};font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">${p.confidence || '—'} confidence</div>
+            <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-family:'JetBrains Mono',monospace;">Predicted open rate (P25–P75 of matched cohort)</div>
+            <div style="font-size:11px;color:${cConf};font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">${stats.confidence} confidence</div>
         </div>
-        <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:14px;">
-            <div style="font-size:36px;font-weight:800;color:var(--text);letter-spacing:-0.02em;line-height:1;">${low.toFixed(1)}%–${high.toFixed(1)}%</div>
-            <div style="font-size:13px;color:var(--muted);">midpoint ${mid.toFixed(1)}% · based on ${n || 0} similar campaigns</div>
+        <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:6px;flex-wrap:wrap;">
+            <div style="font-size:36px;font-weight:800;color:var(--text);letter-spacing:-0.02em;line-height:1;">${stats.p25.toFixed(1)}%–${stats.p75.toFixed(1)}%</div>
+            <div style="font-size:13px;color:var(--muted);">median ${stats.p50.toFixed(1)}% · σ ${stats.sd.toFixed(1)}pp · n=${stats.n} matched campaigns</div>
         </div>
-        <div style="height:8px;background:#0f1c30;border-radius:4px;position:relative;margin-bottom:14px;">
-            <div style="position:absolute;left:${Math.max(0, low)}%;width:${Math.min(100, high) - Math.max(0, low)}%;height:100%;background:linear-gradient(90deg,rgba(129,140,248,0.6),var(--brand));border-radius:4px;"></div>
-            <div style="position:absolute;left:0;top:14px;font-size:10px;color:var(--muted);">0%</div>
-            <div style="position:absolute;right:0;top:14px;font-size:10px;color:var(--muted);">100%</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Cohort range: ${stats.min.toFixed(1)}% to ${stats.max.toFixed(1)}% · mean ${stats.mean.toFixed(1)}%</div>
+
+        <div style="margin:18px 0 6px;">
+            <div style="display:flex;align-items:flex-end;gap:2px;height:80px;padding:0 2px;">${histBars}</div>
+            <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:4px;padding:0 2px;font-family:'JetBrains Mono',monospace;">
+                <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:6px;display:flex;gap:14px;align-items:center;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;">
+                <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;background:var(--brand);border-radius:2px;"></span>Cohort (${histogram.cohortTotal})</span>
+                <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;background:rgba(99,118,150,0.4);border-radius:2px;"></span>Full library (${histogram.libraryTotal})</span>
+                <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;background:rgba(129,140,248,0.25);border-radius:2px;"></span>P25–P75 band</span>
+            </div>
         </div>
-        <div style="font-size:13px;color:var(--text);line-height:1.55;background:rgba(13,27,46,0.5);border-left:3px solid var(--brand);padding:10px 14px;border-radius:4px;">
+
+        ${reasoning ? `
+        <div style="font-size:13px;color:var(--text);line-height:1.55;background:rgba(13,27,46,0.5);border-left:3px solid var(--brand);padding:10px 14px;border-radius:4px;margin-top:14px;">
             <div style="font-size:10px;text-transform:uppercase;color:var(--brand);font-weight:700;letter-spacing:0.06em;margin-bottom:4px;font-family:'JetBrains Mono',monospace;">Reasoning</div>
-            ${(p.reasoning || '').replace(/</g, '&lt;')}
-        </div>
+            ${reasoning.replace(/</g, '&lt;')}
+        </div>` : ''}
     </div>
 
     <div class="card" style="margin-bottom:16px;">
-        <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:12px;">Top references from your library</div>
-        ${refs.map(r => `
+        <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:10px;">Detected patterns in your draft</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+            ${detected.map(d => `<span style="font-size:11px;padding:3px 9px;border:1px solid var(--border);border-radius:12px;color:var(--text);background:rgba(13,27,46,0.5);">${d}</span>`).join('')}
+        </div>
+        ${featureLifts.length ? `
+        <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:8px;">Historical lift by feature</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+            ${featureLifts.map(f => {
+                const positive = f.liftPp >= 0;
+                const color = positive ? '#10b981' : '#f87171';
+                const sign  = positive ? '+' : '';
+                return `
+                <div style="display:grid;grid-template-columns:160px 1fr 90px;gap:12px;align-items:center;font-size:12px;">
+                    <div style="color:var(--text);font-weight:600;">${f.label}</div>
+                    <div style="color:var(--muted);">${f.avgWith.toFixed(1)}% with vs ${f.avgWithout.toFixed(1)}% without · n=${f.nWith}</div>
+                    <div style="color:${color};font-weight:700;text-align:right;font-family:'JetBrains Mono',monospace;">${sign}${f.liftPp.toFixed(1)}pp</div>
+                </div>`;
+            }).join('')}
+        </div>` : `<div style="font-size:12px;color:var(--muted);">Not enough rows to compute per-feature lift.</div>`}
+        ${flags.length ? `
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+            <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:#fcd34d;font-family:'JetBrains Mono',monospace;margin-bottom:6px;">Risk flags</div>
+            ${flags.map(f => `<div style="font-size:12px;color:var(--text);line-height:1.5;margin-bottom:3px;">• ${f}</div>`).join('')}
+        </div>` : ''}
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+        <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:12px;">Closest references from your library</div>
+        ${references.map(r => `
             <div style="padding:12px 0;border-bottom:1px solid var(--border);">
                 <div style="display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin-bottom:4px;">
                     <div style="font-size:14px;font-weight:600;color:var(--text);line-height:1.4;">"${(r.subject || '').replace(/</g, '&lt;')}"</div>
                     <div style="font-size:15px;font-weight:700;color:#10b981;white-space:nowrap;">${Number(r.openRate).toFixed(1)}%</div>
                 </div>
-                <div style="font-size:12px;color:var(--muted);line-height:1.5;">${(r.whyItWorks || '').replace(/</g, '&lt;')}</div>
+                ${r.whyItWorks ? `<div style="font-size:12px;color:var(--muted);line-height:1.5;">${(r.whyItWorks || '').replace(/</g, '&lt;')}</div>` : ''}
             </div>
         `).join('')}
     </div>
 
+    ${suggestion ? `
     <div class="card" style="background:rgba(129,140,248,0.06);border:1px solid rgba(129,140,248,0.25);">
         <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:var(--brand);font-family:'JetBrains Mono',monospace;margin-bottom:8px;">Suggested tightening</div>
-        <div style="font-size:13px;color:var(--text);line-height:1.6;">${(p.suggestion || '').replace(/</g, '&lt;')}</div>
+        <div style="font-size:13px;color:var(--text);line-height:1.6;">${suggestion.replace(/</g, '&lt;')}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:10px;">Your draft: <em>"${draft.replace(/</g, '&lt;')}"</em></div>
-    </div>`;
-}
-
-// ── TREND WATCH ──────────────────────────────────────────────────────────────
-// Three drift checks across the full campaign library, rendered as 0-3 alert
-// cards above the KPI strip on the dashboard.
-function renderTrendWatch(rows) {
-    const el = document.getElementById('dash-trend-watch');
-    if (!el) return;
-    const today = new Date();
-    const daysAgo = n => new Date(today.getTime() - n * 24 * 3600 * 1000).toISOString().slice(0, 10);
-
-    const data = (rows || []).filter(r => r.send_date && r.open_rate != null && !r.parent_campaign);
-    if (!data.length) { el.innerHTML = ''; return; }
-
-    const last30   = data.filter(r => r.send_date >= daysAgo(30));
-    const prior60  = data.filter(r => r.send_date >= daysAgo(90) && r.send_date < daysAgo(30));
-    const allTime  = data;
-
-    const mean = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-    const stddev = arr => {
-        if (arr.length < 3) return null;
-        const m = mean(arr);
-        return Math.sqrt(arr.reduce((a, b) => a + (b - m) ** 2, 0) / arr.length);
-    };
-
-    const alerts = [];
-
-    // 1. Category open-rate drift: last30 vs prior60 — flag drops > 5pp
-    const cats = [...new Set(data.map(r => r.category).filter(Boolean))];
-    cats.forEach(cat => {
-        const recent = last30.filter(r => r.category === cat).map(r => r.open_rate);
-        const prior  = prior60.filter(r => r.category === cat).map(r => r.open_rate);
-        if (recent.length < 2 || prior.length < 3) return;
-        const dropPp = (mean(recent) - mean(prior)) * 100;
-        if (dropPp < -5) {
-            alerts.push({
-                severity: 'warn',
-                headline: `${cat} open rate dropped ${Math.abs(dropPp).toFixed(1)}pp`,
-                detail: `Last 30 days: ${(mean(recent) * 100).toFixed(1)}% across ${recent.length} sends · prior 60 days: ${(mean(prior) * 100).toFixed(1)}% across ${prior.length}.`,
-            });
-        }
-    });
-
-    // 2. Click-to-open divergence: opens steady or up but CTOR fell > 4pp
-    cats.forEach(cat => {
-        const recent = last30.filter(r => r.category === cat && r.click_to_open_rate != null);
-        const prior  = prior60.filter(r => r.category === cat && r.click_to_open_rate != null);
-        if (recent.length < 2 || prior.length < 3) return;
-        const openDelta = (mean(recent.map(r => r.open_rate))             - mean(prior.map(r => r.open_rate))) * 100;
-        const ctorDelta = (mean(recent.map(r => r.click_to_open_rate))    - mean(prior.map(r => r.click_to_open_rate))) * 100;
-        if (openDelta > -1 && ctorDelta < -4) {
-            alerts.push({
-                severity: 'warn',
-                headline: `${cat}: opens holding, clicks slipping`,
-                detail: `CTOR fell ${Math.abs(ctorDelta).toFixed(1)}pp while open rate moved ${openDelta >= 0 ? '+' : ''}${openDelta.toFixed(1)}pp. Subjects pulling weight, content not converting.`,
-            });
-        }
-    });
-
-    // 3. Recent underperformers: last-14-day campaigns >2σ below category mean
-    const last14 = data.filter(r => r.send_date >= daysAgo(14));
-    last14.forEach(c => {
-        const catPeers = allTime.filter(r => r.category === c.category).map(r => r.open_rate);
-        const m  = mean(catPeers);
-        const sd = stddev(catPeers);
-        if (sd == null || sd === 0) return;
-        const z = (c.open_rate - m) / sd;
-        if (z < -2) {
-            alerts.push({
-                severity: 'critical',
-                headline: `${c.campaign_name}: ${(c.open_rate * 100).toFixed(1)}% open rate`,
-                detail: `Category ${c.category || 'uncategorised'} mean is ${(m * 100).toFixed(1)}% (σ ${(sd * 100).toFixed(1)}pp). This campaign is ${Math.abs(z).toFixed(1)}σ below.`,
-            });
-        }
-    });
-
-    if (!alerts.length) {
-        el.innerHTML = `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.22);border-radius:8px;margin-bottom:16px;font-size:12px;color:#10b981;font-weight:600;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-            All categories trending within range. No drift over 5pp in last 30 days.
-        </div>`;
-        return;
-    }
-
-    el.innerHTML = alerts.slice(0, 4).map(a => {
-        const isCrit = a.severity === 'critical';
-        const bg = isCrit ? 'rgba(248,113,113,0.08)' : 'rgba(252,211,77,0.06)';
-        const bd = isCrit ? 'rgba(248,113,113,0.3)'  : 'rgba(252,211,77,0.3)';
-        const fg = isCrit ? '#f87171'                : '#fcd34d';
-        const icon = isCrit ? '!' : '⚠';
-        return `
-        <div style="display:grid;grid-template-columns:24px 1fr;gap:12px;align-items:start;padding:12px 14px;background:${bg};border:1px solid ${bd};border-radius:8px;margin-bottom:10px;">
-            <div style="width:24px;height:24px;border-radius:50%;background:${bg};border:1px solid ${bd};display:flex;align-items:center;justify-content:center;color:${fg};font-weight:700;font-size:13px;">${icon}</div>
-            <div>
-                <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px;">${a.headline}</div>
-                <div style="font-size:11px;color:var(--muted);line-height:1.5;">${a.detail}</div>
-            </div>
-        </div>`;
-    }).join('');
+    </div>` : ''}`;
 }
 
 // Refetch + rerender only the four topline KPI cards. Lightweight (two scoped queries).
