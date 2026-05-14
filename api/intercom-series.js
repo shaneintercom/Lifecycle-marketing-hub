@@ -270,6 +270,80 @@ module.exports = async function (req, res) {
       return res.status(200).json({ subjects: sorted, debug: { fetched: convs.length } });
     }
 
+    // ── FIREHOSE BY CAMPAIGNS ────────────────────────────────────────────────
+    // Search Intercom for conversations whose source.subject matches ANY of a list
+    // of recent campaign subjects. Returns each conversation's first end-user reply.
+    // This is the right approach for "replies to our live campaigns" because the
+    // generic inbox listing is dominated by non-campaign chat.
+    if (mode === 'firehoseByCampaigns') {
+      const subjects = Array.isArray(req.body.subjects)
+        ? [...new Set(req.body.subjects.filter(s => s && typeof s === 'string'))].slice(0, 25)
+        : [];
+      if (!subjects.length) return res.status(400).json({ error: 'subjects array required' });
+      const hours = Number(req.body.hours) || 168; // default 7 days
+      const sinceTs = Math.floor(Date.now() / 1000) - hours * 3600;
+
+      const subjectClauses = subjects.map(s => ({ field: 'source.subject', operator: '=', value: s }));
+      const searchBody = {
+        query: {
+          operator: 'AND',
+          value: [
+            { field: 'created_at', operator: '>', value: sinceTs },
+            subjectClauses.length === 1 ? subjectClauses[0] : { operator: 'OR', value: subjectClauses },
+          ],
+        },
+        pagination: { per_page: 100 },
+      };
+
+      const searchResp = await fetch('https://api.intercom.io/conversations/search', {
+        method: 'POST',
+        headers: icHeaders,
+        body: JSON.stringify(searchBody),
+      });
+      if (!searchResp.ok) {
+        const err = await searchResp.text();
+        return res.status(500).json({ error: `Intercom search ${searchResp.status}: ${err.slice(0, 300)}` });
+      }
+      const searchData = await searchResp.json();
+      const convs = (searchData.conversations || []).slice(0, 60); // cap fetches
+
+      const fullConvs = await Promise.all(
+        convs.map(c =>
+          fetch(`https://api.intercom.io/conversations/${c.id}`, { headers: icHeaders })
+            .then(r => r.ok ? r.json() : null)
+            .catch(() => null)
+        )
+      );
+
+      const replies = [];
+      for (const conv of fullConvs) {
+        if (!conv || !conv.id) continue;
+        const parts = conv.conversation_parts?.conversation_parts || [];
+        const userReply = parts.find(p =>
+          (p.author?.type === 'user' || p.author?.type === 'lead') &&
+          p.body && p.body.trim() !== '' && p.body !== '<p></p>' && p.body !== '<p> </p>'
+        );
+        if (!userReply) continue;
+        const author = userReply.author || {};
+        replies.push({
+          convId: conv.id,
+          contactName:   author.name || author.email || 'Unknown',
+          contactEmail:  author.email || '',
+          replyText:     stripHtml(userReply.body || ''),
+          replyDate:     userReply.created_at,
+          sourceSubject: stripHtml(conv.source?.subject || ''),
+        });
+      }
+
+      replies.sort((a, b) => b.replyDate - a.replyDate);
+      return res.status(200).json({
+        replies,
+        windowHours: hours,
+        subjectsSearched: subjects.length,
+        conversationsFound: searchData.total_count ?? convs.length,
+      });
+    }
+
     // ── FIREHOSE MODE ────────────────────────────────────────────────────────
     // Pulse panel: pull the last N conversations and extract the first user reply
     // from each so the dashboard can show "what customers are saying right now"

@@ -1784,49 +1784,51 @@ async function refreshPulseFirehose() {
     const metaEl  = document.getElementById('pulse-firehose-meta');
     const btn     = document.getElementById('pulse-firehose-refresh');
     btn.disabled = true; btn.style.opacity = '0.6';
-    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Pulling recent campaigns and matching replies...</div>`;
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Pulling recent campaigns and searching Intercom...</div>`;
     try {
-        // 1. Recent shipped campaign subjects (last 30 days) — used to filter inbox noise
-        //    so the firehose only shows replies to campaigns the team actually shipped.
+        // 1. Recent shipped campaigns from Supabase. Sort newest first so the 25-subject
+        //    cap (Intercom search OR-clause limit) catches the freshest campaigns.
         const today = new Date();
         const thirtyAgo = new Date(today.getTime() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
         const { data: recentCamps } = await db.from('lifecycle_campaigns')
             .select('campaign_name,subject_line,send_date')
             .gte('send_date', thirtyAgo)
-            .not('subject_line', 'is', null);
-        const campSubjects = (recentCamps || [])
+            .not('subject_line', 'is', null)
+            .order('send_date', { ascending: false });
+        const subjects = [...new Set((recentCamps || [])
             .filter(c => c.subject_line && c.subject_line.trim())
-            .map(c => ({ raw: c.subject_line, norm: _pulseNormSubject(c.subject_line), name: c.campaign_name }));
+            .map(c => c.subject_line.trim()))]
+            .slice(0, 25);
 
-        // 2. Recent inbox conversations from Intercom
+        if (!subjects.length) {
+            el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">No campaigns with subject lines logged in the last 30 days.</div>`;
+            metaEl.textContent = _pulseRefreshedTag();
+            return;
+        }
+
+        // 2. Search Intercom for conversations matching any of those subjects in the last 7 days.
+        //    This is far more reliable than scanning the recent inbox (which is mostly chat).
         const r1 = await fetch('/api/intercom-series', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: 'firehose', hours: 48 }),
+            body: JSON.stringify({ mode: 'firehoseByCampaigns', subjects, hours: 168 }),
         });
         const d1 = await r1.json();
         if (!r1.ok) throw new Error(d1.error || `Intercom error ${r1.status}`);
-        const allReplies = d1.replies || [];
+        const replies = d1.replies || [];
 
-        // 3. Filter to replies whose source subject matches a recent campaign subject
-        const matched = allReplies.filter(rep => {
-            const norm = _pulseNormSubject(rep.sourceSubject);
-            if (!norm) return false;
-            return campSubjects.some(cs => cs.norm && (cs.norm === norm || norm.includes(cs.norm) || cs.norm.includes(norm)));
-        });
-
-        if (!matched.length) {
+        if (!replies.length) {
             el.innerHTML = `
                 <div style="padding:28px;text-align:center;">
-                    <div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:6px;">No campaign replies in the last 48 hours</div>
-                    <div style="font-size:12px;color:var(--muted);">Pulled ${allReplies.length} inbox conversation${allReplies.length !== 1 ? 's' : ''}, none matched the ${campSubjects.length} recently shipped campaigns.</div>
+                    <div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:6px;">No campaign replies in the last 7 days</div>
+                    <div style="font-size:12px;color:var(--muted);">Searched ${subjects.length} recent campaign subject${subjects.length !== 1 ? 's' : ''}. Intercom returned ${d1.conversationsFound || 0} matching conversation${(d1.conversationsFound || 0) !== 1 ? 's' : ''}.</div>
                 </div>`;
             metaEl.textContent = _pulseRefreshedTag();
             return;
         }
 
-        // 4. Classify the matched batch
-        const batch = matched.slice(0, 60);
+        // 3. Classify the batch via the existing Haiku endpoint (max 60 per call).
+        const batch = replies.slice(0, 60);
         const r2 = await fetch('/api/claude-series-analysis', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1837,7 +1839,7 @@ async function refreshPulseFirehose() {
         const classified = batch.map(r => ({ ...r, ...(byId.get(r.convId) || {}) }));
 
         _renderPulseFirehoseChart(classified);
-        metaEl.textContent = `${classified.length} matched · ${_pulseRefreshedTag()}`;
+        metaEl.textContent = `${classified.length} replies across ${subjects.length} campaigns · ${_pulseRefreshedTag()}`;
     } catch (err) {
         el.innerHTML = `<div style="padding:20px;color:#fcd34d;font-size:13px;">Couldn't load firehose: ${err.message}</div>`;
     } finally {

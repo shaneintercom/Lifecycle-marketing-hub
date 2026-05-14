@@ -1045,6 +1045,35 @@ module.exports = async function (req, res) {
 
   if (req.method !== 'POST') return res.status(405).end();
 
+  // ── JWT DIAGNOSTIC ────────────────────────────────────────────────────────
+  // Returns the iss/sub claims we'd send so you can compare against what
+  // Snowflake expects. Run `DESC USER SHANE_RYAN` in Snowsight and check the
+  // RSA_PUBLIC_KEY_FP column matches the fingerprint reported here.
+  if (req.body?.mode === 'jwtDebug') {
+    const pk = (process.env.SNOWFLAKE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+    if (!pk) return res.status(503).json({ error: 'SNOWFLAKE_PRIVATE_KEY not set' });
+    try {
+      const account = (process.env.SNOWFLAKE_ACCOUNT || 'PEOSZPH-INTERCOM_US').toUpperCase();
+      const user    = (process.env.SNOWFLAKE_USER    || 'SHANE_RYAN').toUpperCase();
+      const privateKey = crypto.createPrivateKey(pk);
+      const publicKey  = crypto.createPublicKey(privateKey);
+      const pubDer = publicKey.export({ type: 'spki', format: 'der' });
+      const fp = crypto.createHash('sha256').update(pubDer).digest('base64');
+      return res.status(200).json({
+        ok: true,
+        account,
+        user,
+        iss: `${account}.${user}.SHA256:${fp}`,
+        sub: `${account}.${user}`,
+        fingerprint: `SHA256:${fp}`,
+        privateKeyChars: pk.length,
+        hint: 'In Snowsight run: DESC USER ' + user + '; — compare the RSA_PUBLIC_KEY_FP column to the fingerprint above. If they differ, the public key registered in Snowflake does not match the private key in SNOWFLAKE_PRIVATE_KEY.',
+      });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message, hint: 'Could not parse SNOWFLAKE_PRIVATE_KEY — it may be malformed or truncated in the Vercel env var.' });
+    }
+  }
+
   // ── PULSE: live send performance for the last N hours ───────────────────────
   // Aggregate per ruleset (campaign) from FCT_OUTBOUND_RECEIPTS. Same data source
   // the existing impact analysis uses, just grouped instead of joined to behavior.
