@@ -1770,13 +1770,35 @@ function _pulseConcernPill(level) {
     return `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:${cfg.bg};color:${cfg.fg};letter-spacing:0.03em;margin-left:4px;">${cfg.label}</span>`;
 }
 
+// Normalise a subject for matching: lowercase, strip Re/Fwd/AW/SV prefixes, collapse whitespace.
+function _pulseNormSubject(s) {
+    return (s || '').toLowerCase()
+        .replace(/^\s*(re|fw|fwd|aw|sv)\s*:\s*/gi, '')
+        .replace(/^\s*(re|fw|fwd|aw|sv)\s*:\s*/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 async function refreshPulseFirehose() {
     const el      = document.getElementById('pulse-firehose');
     const metaEl  = document.getElementById('pulse-firehose-meta');
     const btn     = document.getElementById('pulse-firehose-refresh');
     btn.disabled = true; btn.style.opacity = '0.6';
-    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Pulling recent conversations from Intercom...</div>`;
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">Pulling recent campaigns and matching replies...</div>`;
     try {
+        // 1. Recent shipped campaign subjects (last 30 days) — used to filter inbox noise
+        //    so the firehose only shows replies to campaigns the team actually shipped.
+        const today = new Date();
+        const thirtyAgo = new Date(today.getTime() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+        const { data: recentCamps } = await db.from('lifecycle_campaigns')
+            .select('campaign_name,subject_line,send_date')
+            .gte('send_date', thirtyAgo)
+            .not('subject_line', 'is', null);
+        const campSubjects = (recentCamps || [])
+            .filter(c => c.subject_line && c.subject_line.trim())
+            .map(c => ({ raw: c.subject_line, norm: _pulseNormSubject(c.subject_line), name: c.campaign_name }));
+
+        // 2. Recent inbox conversations from Intercom
         const r1 = await fetch('/api/intercom-series', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1784,46 +1806,152 @@ async function refreshPulseFirehose() {
         });
         const d1 = await r1.json();
         if (!r1.ok) throw new Error(d1.error || `Intercom error ${r1.status}`);
-        const replies = d1.replies || [];
-        if (!replies.length) {
-            el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">No customer replies in the last ${d1.windowHours} hours.</div>`;
+        const allReplies = d1.replies || [];
+
+        // 3. Filter to replies whose source subject matches a recent campaign subject
+        const matched = allReplies.filter(rep => {
+            const norm = _pulseNormSubject(rep.sourceSubject);
+            if (!norm) return false;
+            return campSubjects.some(cs => cs.norm && (cs.norm === norm || norm.includes(cs.norm) || cs.norm.includes(norm)));
+        });
+
+        if (!matched.length) {
+            el.innerHTML = `
+                <div style="padding:28px;text-align:center;">
+                    <div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:6px;">No campaign replies in the last 48 hours</div>
+                    <div style="font-size:12px;color:var(--muted);">Pulled ${allReplies.length} inbox conversation${allReplies.length !== 1 ? 's' : ''}, none matched the ${campSubjects.length} recently shipped campaigns.</div>
+                </div>`;
             metaEl.textContent = _pulseRefreshedTag();
             return;
         }
-        // Classify in one batch (max 60 per the existing endpoint)
-        const batch = replies.slice(0, 60);
+
+        // 4. Classify the matched batch
+        const batch = matched.slice(0, 60);
         const r2 = await fetch('/api/claude-series-analysis', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: 'classify', subject: 'Live firehose', replies: batch.map(r => ({ convId: r.convId, replyText: r.replyText })) }),
+            body: JSON.stringify({ mode: 'classify', subject: 'Pulse firehose', replies: batch.map(r => ({ convId: r.convId, replyText: r.replyText })) }),
         });
         const d2 = await r2.json();
         const byId = new Map((d2.classifications || []).map(c => [c.convId, c]));
+        const classified = batch.map(r => ({ ...r, ...(byId.get(r.convId) || {}) }));
 
-        const cards = batch.map(r => {
-            const c = byId.get(r.convId) || {};
-            const snippet = (r.replyText || '').slice(0, 220);
-            const more = (r.replyText || '').length > 220 ? '…' : '';
-            return `
-            <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
-                    ${_pulseSentimentPill(c.sentiment)}
-                    ${c.theme ? `<span style="font-size:10px;font-weight:700;color:var(--brand);background:rgba(129,140,248,0.12);padding:2px 8px;border-radius:4px;letter-spacing:0.03em;">${c.theme}</span>` : ''}
-                    ${_pulseConcernPill(c.concern)}
-                    <span style="margin-left:auto;font-size:11px;color:var(--muted);">${_pulseTimeAgo(r.replyDate)}</span>
-                </div>
-                <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:6px;">${snippet.replace(/</g, '&lt;')}${more}</div>
-                <div style="font-size:11px;color:var(--muted);">${(r.contactName || 'Unknown').replace(/</g, '&lt;')} · ${(r.sourceSubject || '').replace(/</g, '&lt;').slice(0, 80)}</div>
-            </div>`;
-        }).join('');
-
-        el.innerHTML = cards;
-        metaEl.textContent = `${batch.length} replies · ${_pulseRefreshedTag()}`;
+        _renderPulseFirehoseChart(classified);
+        metaEl.textContent = `${classified.length} matched · ${_pulseRefreshedTag()}`;
     } catch (err) {
         el.innerHTML = `<div style="padding:20px;color:#fcd34d;font-size:13px;">Couldn't load firehose: ${err.message}</div>`;
     } finally {
         btn.disabled = false; btn.style.opacity = '1';
     }
+}
+
+// Render firehose as aggregate viz: sentiment summary, themes bar chart with sentiment
+// stack, concerning replies highlight, plus an expandable raw list for drill-in.
+function _renderPulseFirehoseChart(replies) {
+    const el = document.getElementById('pulse-firehose');
+    const total = replies.length;
+
+    // Sentiment totals
+    const sCounts = { positive: 0, neutral: 0, negative: 0 };
+    replies.forEach(r => { sCounts[r.sentiment || 'neutral']++; });
+    const sPct = s => total ? Math.round((sCounts[s] / total) * 100) : 0;
+
+    // Theme aggregation with sentiment breakdown per theme
+    const themeMap = new Map();
+    replies.forEach(r => {
+        const t = r.theme || 'other';
+        if (!themeMap.has(t)) themeMap.set(t, { theme: t, count: 0, positive: 0, neutral: 0, negative: 0, replies: [] });
+        const row = themeMap.get(t);
+        row.count++;
+        row[r.sentiment || 'neutral']++;
+        row.replies.push(r);
+    });
+    const themes = Array.from(themeMap.values()).sort((a, b) => b.count - a.count);
+    const topThemes = themes.slice(0, 8);
+    const maxCount = Math.max(...topThemes.map(t => t.count), 1);
+
+    // Concerning replies (concern >= 2)
+    const concerning = replies.filter(r => (r.concern || 0) >= 2).slice(0, 3);
+
+    const sentimentBar = `
+        <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:#0f1c30;">
+            <div style="width:${sPct('positive')}%;background:#10b981;" title="Positive: ${sCounts.positive}"></div>
+            <div style="width:${sPct('neutral')}%;background:#6c84a2;" title="Neutral: ${sCounts.neutral}"></div>
+            <div style="width:${sPct('negative')}%;background:#fcd34d;" title="Negative: ${sCounts.negative}"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--muted);">
+            <span><span style="color:#10b981;font-weight:700;">●</span> ${sCounts.positive} positive</span>
+            <span><span style="color:#6c84a2;font-weight:700;">●</span> ${sCounts.neutral} neutral</span>
+            <span><span style="color:#fcd34d;font-weight:700;">●</span> ${sCounts.negative} negative</span>
+        </div>`;
+
+    const themeRows = topThemes.map(t => {
+        const width = (t.count / maxCount) * 100;
+        const segs = [
+            { k: 'positive', c: '#10b981' },
+            { k: 'neutral',  c: '#6c84a2' },
+            { k: 'negative', c: '#fcd34d' },
+        ].map(({ k, c }) => {
+            const pct = t.count ? (t[k] / t.count) * 100 : 0;
+            return pct > 0 ? `<div style="width:${pct}%;background:${c};"></div>` : '';
+        }).join('');
+        return `
+        <div style="display:grid;grid-template-columns:140px 1fr 36px;gap:12px;align-items:center;padding:8px 0;">
+            <div style="font-size:12px;font-weight:600;color:var(--text);">${t.theme}</div>
+            <div style="position:relative;height:18px;background:#0f1c30;border-radius:4px;overflow:hidden;">
+                <div style="display:flex;height:100%;width:${width}%;border-radius:4px;overflow:hidden;">${segs}</div>
+            </div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);text-align:right;">${t.count}</div>
+        </div>`;
+    }).join('');
+
+    const concerningHtml = concerning.length ? `
+        <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fcd34d;margin-bottom:8px;">Worth escalating · ${concerning.length}</div>
+            ${concerning.map(r => `
+                <div style="background:rgba(252,211,77,0.06);border:1px solid rgba(252,211,77,0.2);border-radius:6px;padding:10px 12px;margin-bottom:6px;">
+                    <div style="font-size:12px;color:var(--text);line-height:1.5;margin-bottom:4px;">"${(r.replyText || '').slice(0, 200).replace(/</g, '&lt;')}${(r.replyText || '').length > 200 ? '…' : ''}"</div>
+                    <div style="font-size:11px;color:var(--muted);">${(r.contactName || 'Unknown').replace(/</g, '&lt;')} · ${(r.sourceSubject || '').replace(/</g, '&lt;').slice(0, 60)} · ${_pulseTimeAgo(r.replyDate)}</div>
+                </div>
+            `).join('')}
+        </div>` : '';
+
+    const detailRows = replies.map(r => `
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
+                ${_pulseSentimentPill(r.sentiment)}
+                ${r.theme ? `<span style="font-size:10px;font-weight:700;color:var(--brand);background:rgba(129,140,248,0.12);padding:2px 8px;border-radius:4px;letter-spacing:0.03em;">${r.theme}</span>` : ''}
+                ${_pulseConcernPill(r.concern)}
+                <span style="margin-left:auto;font-size:11px;color:var(--muted);">${_pulseTimeAgo(r.replyDate)}</span>
+            </div>
+            <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:4px;">${(r.replyText || '').slice(0, 220).replace(/</g, '&lt;')}${(r.replyText || '').length > 220 ? '…' : ''}</div>
+            <div style="font-size:11px;color:var(--muted);">${(r.contactName || 'Unknown').replace(/</g, '&lt;')} · ${(r.sourceSubject || '').replace(/</g, '&lt;').slice(0, 80)}</div>
+        </div>`).join('');
+
+    el.innerHTML = `
+        <div style="padding:18px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
+                <div>
+                    <div style="font-size:24px;font-weight:800;color:var(--text);line-height:1;">${total}</div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:4px;">replies to live campaigns · last 48h</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:4px;">Sentiment mix</div>
+                    <div style="min-width:240px;">${sentimentBar}</div>
+                </div>
+            </div>
+            <div style="margin-top:18px;">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:6px;">Top themes · stacked by sentiment</div>
+                ${themeRows}
+            </div>
+            ${concerningHtml}
+            <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+                <button class="btn-sm" onclick="document.getElementById('pulse-firehose-detail').style.display = document.getElementById('pulse-firehose-detail').style.display === 'block' ? 'none' : 'block'; this.textContent = this.textContent.includes('Show') ? 'Hide all ' + ${total} + ' replies' : 'Show all ' + ${total} + ' replies';" style="font-size:12px;">Show all ${total} replies</button>
+            </div>
+        </div>
+        <div id="pulse-firehose-detail" style="display:none;border-top:1px solid var(--border);">
+            ${detailRows}
+        </div>`;
 }
 
 async function refreshPulsePerf() {
