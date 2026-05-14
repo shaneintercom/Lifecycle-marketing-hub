@@ -1086,49 +1086,6 @@ module.exports = async function (req, res) {
     }
   }
 
-  // ── PULSE: live send performance for the last N hours ───────────────────────
-  // Aggregate per ruleset (campaign) from FCT_OUTBOUND_RECEIPTS. Same data source
-  // the existing impact analysis uses, just grouped instead of joined to behavior.
-  if (req.body?.mode === 'liveSendPerf') {
-    const pk0 = process.env.SNOWFLAKE_PRIVATE_KEY;
-    if (!pk0) return res.status(503).json({ setupRequired: true, error: 'Snowflake credentials not configured.' });
-    const hours = Number(req.body.hours) || 72;
-    try {
-      const jwt = generateJWT();
-      const sql = `
-        SELECT
-          RULESET_ID::TEXT                                                          AS RULESET_ID,
-          COUNT(*)::TEXT                                                            AS SENDS,
-          COUNT(DISTINCT USER_ID)::TEXT                                             AS UNIQUE_RECIPIENTS,
-          ROUND(AVG(CASE WHEN OPEN_ID IS NOT NULL THEN 1.0 ELSE 0.0 END) * 100, 1)::TEXT  AS OPEN_RATE,
-          ROUND(AVG(CASE WHEN WAS_CLICKED THEN 1.0 ELSE 0.0 END) * 100, 1)::TEXT          AS CLICK_RATE,
-          TO_VARCHAR(MIN(CREATED_AT), 'YYYY-MM-DD HH24:MI')                         AS FIRST_SENT,
-          TO_VARCHAR(MAX(CREATED_AT), 'YYYY-MM-DD HH24:MI')                         AS LAST_SENT
-        FROM INTERCOM_PROD.CORE_PRODUCT.FCT_OUTBOUND_RECEIPTS
-        WHERE APP_ID = 6
-          AND CONTENT_TYPE = 'email'
-          AND CREATED_AT >= DATEADD(hour, -${hours}, CURRENT_TIMESTAMP())
-          AND RULESET_ID IS NOT NULL
-        GROUP BY RULESET_ID
-        ORDER BY COUNT(*) DESC
-        LIMIT 25
-      `;
-      const rows = await runQuery(sql, jwt);
-      const campaigns = (rows || []).map(r => ({
-        rulesetId:        r.RULESET_ID,
-        sends:            Number(r.SENDS) || 0,
-        uniqueRecipients: Number(r.UNIQUE_RECIPIENTS) || 0,
-        openRate:         r.OPEN_RATE === null || r.OPEN_RATE === undefined ? null : Number(r.OPEN_RATE),
-        clickRate:        r.CLICK_RATE === null || r.CLICK_RATE === undefined ? null : Number(r.CLICK_RATE),
-        firstSent:        r.FIRST_SENT,
-        lastSent:         r.LAST_SENT,
-      }));
-      return res.status(200).json({ campaigns, windowHours: hours });
-    } catch (err) {
-      return res.status(500).json({ error: err.message });
-    }
-  }
-
   const { rulesetId, featureMetric } = req.body || {};
 
   if (!rulesetId || isNaN(Number(rulesetId))) {
